@@ -16,27 +16,30 @@ macro(shader)
 endmacro()
 
 add_library(liftedvulkan ${src})
+target_precompile_headers(liftedvulkan PRIVATE include/precomp.h)
+target_include_directories(liftedvulkan PRIVATE include)
 
-add_subdirectory(${CMAKE_SOURCE_DIR}/external/vks)
-link_directories(${CMAKE_SOURCE_DIR}/external/vks)
-target_include_directories(liftedvulkan PUBLIC ${CMAKE_SOURCE_DIR}/vks/)
-target_link_libraries(liftedvulkan vks)
+include_directories(liftedvulkan PUBLIC ${CMAKE_SOURCE_DIR}/external/vks/)
 
 add_subdirectory(${CMAKE_SOURCE_DIR}/external/glfw)
 link_directories(${CMAKE_SOURCE_DIR}/external/glfw)
-target_include_directories(liftedvulkan PUBLIC ${CMAKE_SOURCE_DIR}/external/glfw/include)
+include_directories(liftedvulkan PUBLIC ${CMAKE_SOURCE_DIR}/external/glfw/include/)
 target_link_libraries(liftedvulkan glfw)
 
 add_subdirectory(${CMAKE_SOURCE_DIR}/external/glm)
 link_directories(${CMAKE_SOURCE_DIR}/external/glm)
-target_include_directories(liftedvulkan PUBLIC ${CMAKE_SOURCE_DIR}/external/glm/glm)
+include_directories(liftedvulkan PUBLIC ${CMAKE_SOURCE_DIR}/external/glm/glm/)
 target_link_libraries(liftedvulkan glm)
 
 
 add_subdirectory(${CMAKE_SOURCE_DIR}/external/imgui)
 link_directories(${CMAKE_SOURCE_DIR}/external/imgui)
-target_include_directories(liftedvulkan PRIVATE ${CMAKE_SOURCE_DIR}/external/imgui)
+include_directories(liftedvulkan PRIVATE ${CMAKE_SOURCE_DIR}/external/imgui/)
 target_link_libraries(liftedvulkan imgui)
 
 find_package(Vulkan REQUIRED)
 target_link_libraries(liftedvulkan Vulkan::Vulkan)
+
+add_subdirectory(app)
+target_include_directories(app PRIVATE ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(app liftedvulkan)
