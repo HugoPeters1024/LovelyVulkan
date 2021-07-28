@@ -17,6 +17,7 @@ typedef unsigned char uchar;
 #include <vector>
 #include <fstream>
 #include <limits>
+#include <utility>
 #include <optional>
 
 // GLFW
@@ -44,6 +45,10 @@ typedef unsigned char uchar;
 #include <glm/gtx/hash.hpp>
 #include <glm/gtx/perpendicular.hpp>
 
+// SPDLOG
+#include <spdlog/spdlog.h>
+namespace logger = spdlog;
+
 // UTILS
 namespace lv {
     class NoCopy {
@@ -55,3 +60,4 @@ namespace lv {
 }
 
 #define GET(type, var) inline type get_##var() const { return var; }
+#define vkCheck(x) VK_CHECK_RESULT(x)

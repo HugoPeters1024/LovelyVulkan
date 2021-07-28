@@ -3,11 +3,12 @@
 #include <liftedvulkan.h>
 
 int main(int argc, char** argv) {
-    uchar lol;
-    lv::Window window;
+    lv::DeviceInfo deviceInfo;
+    lv::Device device(deviceInfo);
+    auto window = device.createWindow("Testbed", 640, 480);
 
-    while (!window.shouldClose()) {
-        window.processEvents();
+    while (!window->shouldClose()) {
+        window->processEvents();
     }
-    printf("Hello Vulkan!\n");
+    return 0;
 }

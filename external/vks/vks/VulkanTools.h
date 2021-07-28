@@ -49,7 +49,7 @@
 }
 #else
 #define VK_CHECK_RESULT(f)																				\
-{																										\
+{                                             \
 	VkResult res = (f);																					\
 	if (res != VK_SUCCESS)																				\
 	{																									\

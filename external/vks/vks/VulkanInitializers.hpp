@@ -17,6 +17,47 @@ namespace vks
 {
 	namespace initializers
 	{
+	    inline VkApplicationInfo applicationInfo(uint32_t apiVersion) {
+	        VkApplicationInfo appInfo{};
+	        appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+	        appInfo.pApplicationName = "app name";
+	        appInfo.pEngineName = "engine name";
+	        appInfo.engineVersion = VK_MAKE_VERSION(1,0,0);
+	        appInfo.apiVersion = apiVersion;
+	        return appInfo;
+	    }
+
+	    inline VkInstanceCreateInfo instanceInfo(VkApplicationInfo* appInfo, const std::vector<const char*>& validationLayers, const std::vector<const char*>& extensions) {
+	        VkInstanceCreateInfo instanceInfo{};
+	        instanceInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+            instanceInfo.flags = 0;
+            instanceInfo.pApplicationInfo = appInfo;
+            instanceInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
+            instanceInfo.ppEnabledLayerNames = validationLayers.data();
+            instanceInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
+            instanceInfo.ppEnabledExtensionNames = extensions.data();
+            return instanceInfo;
+	    };
+
+	    inline VkDeviceQueueCreateInfo queueCreateInfo(uint32_t queueFamilyIndex, const float* queuePriority) {
+	        VkDeviceQueueCreateInfo queueInfo{};
+	        queueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+	        queueInfo.queueFamilyIndex = queueFamilyIndex;
+	        queueInfo.queueCount = 1;
+	        queueInfo.pQueuePriorities = queuePriority;
+	        return queueInfo;
+	    }
+
+	    inline VkDeviceCreateInfo deviceCreateInfo(const std::vector<VkDeviceQueueCreateInfo>& queueInfos, const std::vector<const char*>& deviceExtensions, VkPhysicalDeviceFeatures* features) {
+	        VkDeviceCreateInfo deviceInfo{};
+	        deviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+	        deviceInfo.queueCreateInfoCount = static_cast<uint32_t>(queueInfos.size());
+	        deviceInfo.pQueueCreateInfos = queueInfos.data();
+	        deviceInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
+	        deviceInfo.ppEnabledExtensionNames = deviceExtensions.data();
+	        deviceInfo.pEnabledFeatures = features;
+	        return deviceInfo;
+	    }
 
 		inline VkMemoryAllocateInfo memoryAllocateInfo()
 		{

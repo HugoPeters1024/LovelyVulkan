@@ -19,7 +19,10 @@ add_library(liftedvulkan ${src})
 target_precompile_headers(liftedvulkan PRIVATE include/precomp.h)
 target_include_directories(liftedvulkan PRIVATE include)
 
+add_subdirectory(${CMAKE_SOURCE_DIR}/external/vks)
+link_directories(${CMAKE_SOURCE_DIR}/external/vks)
 include_directories(liftedvulkan PUBLIC ${CMAKE_SOURCE_DIR}/external/vks/)
+target_link_libraries(liftedvulkan vks)
 
 add_subdirectory(${CMAKE_SOURCE_DIR}/external/glfw)
 link_directories(${CMAKE_SOURCE_DIR}/external/glfw)
@@ -36,6 +39,11 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/external/imgui)
 link_directories(${CMAKE_SOURCE_DIR}/external/imgui)
 include_directories(liftedvulkan PRIVATE ${CMAKE_SOURCE_DIR}/external/imgui/)
 target_link_libraries(liftedvulkan imgui)
+
+add_subdirectory(${CMAKE_SOURCE_DIR}/external/spdlog)
+link_directories(${CMAKE_SOURCE_DIR}/external/spdlog)
+include_directories(liftedvulkan PRIVATE ${CMAKE_SOURCE_DIR}/external/spdlog/include/)
+target_link_libraries(liftedvulkan spdlog)
 
 find_package(Vulkan REQUIRED)
 target_link_libraries(liftedvulkan Vulkan::Vulkan)
