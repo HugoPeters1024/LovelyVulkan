@@ -1,4 +1,5 @@
 #include "Device.h"
+#include "Window.h"
 #define VMA_IMPLEMENTATION
 #include <vks/vk_mem_alloc.hpp>
 
@@ -17,6 +18,8 @@ Device::Device(lv::DeviceInfo info) : info(std::move(info)) {
     auto dummyWindow = std::make_unique<DummyWindow>(vkInstance);
     pickPhysicalDevice(dummyWindow->getSurface());
     createLogicalDevice();
+    createVmaAllocator();
+    createCommandPool();
     logger::info("Device setup and ready for use");
 }
 
@@ -24,6 +27,7 @@ Device::~Device() {
     logger::info("Device being destroyed");
     windows.clear();
     glfwTerminate();
+    vkDestroyCommandPool(vkDevice, vkCommandPool, nullptr);
     vkDestroyDevice(vkDevice, nullptr);
     vkDestroyInstance(vkInstance, nullptr);
 }
@@ -126,6 +130,11 @@ void Device::createVmaAllocator() {
     vkCheck(vmaCreateAllocator(&allocatorInfo, &vmaAllocator));
 }
 
+void Device::createCommandPool() {
+    auto createInfo = vks::initializers::commandPoolCreateInfo(queueFamilyIndices.graphics.value());
+    vkCheck(vkCreateCommandPool(vkDevice, &createInfo, nullptr, &vkCommandPool));
+}
+
 QueueFamilyIndices Device::findQueueFamilyIndices(VkPhysicalDevice device, VkSurfaceKHR surface) {
     QueueFamilyIndices ret{};
 
@@ -152,10 +161,58 @@ Window *Device::createWindow(const std::string &name, int width, int height) {
     return windows.back().get();
 }
 
+VkCommandBuffer Device::beginSingleTimeCommands() {
+    auto allocInfo = vks::initializers::commandBufferAllocateInfo(vkCommandPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1);
+    VkCommandBuffer ret;
+    vkCheck(vkAllocateCommandBuffers(vkDevice, &allocInfo, &ret));
+
+    auto beginInfo = vks::initializers::commandBufferBeginInfo();
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    vkCheck(vkBeginCommandBuffer(ret, &beginInfo));
+    return ret;
+}
+
+void Device::submitSingleTimeCommands(VkCommandBuffer cmdBuffer) {
+    vkCheck(vkEndCommandBuffer(cmdBuffer));
+    auto submitInfo = vks::initializers::submitInfo(&cmdBuffer);
+    vkCheck(vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE));
+    vkQueueWaitIdle(graphicsQueue);
+    vkFreeCommandBuffers(vkDevice, vkCommandPool, 1, &cmdBuffer);
+}
+
+void Device::singleTimeCommands(const std::function<void(VkCommandBuffer)>& callback) {
+    auto cmdBuffer = beginSingleTimeCommands();
+    callback(cmdBuffer);
+    submitSingleTimeCommands(cmdBuffer);
+}
+
 std::string Device::getDeviceName() const {
     VkPhysicalDeviceProperties deviceProperties;
     vkGetPhysicalDeviceProperties(vkPhysicalDevice, &deviceProperties);
     return deviceProperties.deviceName;
+}
+
+SwapchainSupportDetails Device::getSwapchainSupportDetails(VkSurfaceKHR surface) const {
+    SwapchainSupportDetails details{};
+
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vkPhysicalDevice, surface, &details.capabilities);
+
+    uint32_t formatCount = 0;
+    vkGetPhysicalDeviceSurfaceFormatsKHR(vkPhysicalDevice, surface, &formatCount, nullptr);
+    if (formatCount > 0) {
+        details.formats.resize(formatCount);
+        vkGetPhysicalDeviceSurfaceFormatsKHR(vkPhysicalDevice, surface, &formatCount, details.formats.data());
+    }
+
+    uint32_t presentCount = 0;
+    vkGetPhysicalDeviceSurfacePresentModesKHR(vkPhysicalDevice, surface, &presentCount, nullptr);
+    if (presentCount > 0) {
+        details.presentModes.resize(presentCount);
+        vkGetPhysicalDeviceSurfacePresentModesKHR(vkPhysicalDevice, surface, &presentCount, details.presentModes.data());
+    }
+
+    return details;
 }
 
 }

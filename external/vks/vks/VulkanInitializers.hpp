@@ -103,10 +103,11 @@ namespace vks
             return region;
 		}
 
-		inline VkCommandPoolCreateInfo commandPoolCreateInfo()
+		inline VkCommandPoolCreateInfo commandPoolCreateInfo(uint32_t queueFamily)
 		{
 			VkCommandPoolCreateInfo cmdPoolCreateInfo {};
 			cmdPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+			cmdPoolCreateInfo.queueFamilyIndex = queueFamily;
 			return cmdPoolCreateInfo;
 		}
 
@@ -265,6 +266,24 @@ namespace vks
 			VkSubmitInfo submitInfo {};
 			submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 			return submitInfo;
+		}
+
+        inline VkSubmitInfo submitInfo(VkCommandBuffer* cmdBuffer)
+        {
+            VkSubmitInfo submitInfo {};
+            submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+            submitInfo.commandBufferCount = 1;
+            submitInfo.pCommandBuffers = cmdBuffer;
+            return submitInfo;
+        }
+
+        inline VkSubmitInfo submitInfo(const std::vector<VkCommandBuffer>& cmdBuffers)
+        {
+            VkSubmitInfo submitInfo {};
+            submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+            submitInfo.commandBufferCount = static_cast<uint32_t>(cmdBuffers.size());
+            submitInfo.pCommandBuffers = cmdBuffers.data();
+            return submitInfo;
 		}
 
 		inline VkViewport viewport(
