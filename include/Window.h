@@ -30,11 +30,12 @@ public:
 
     bool shouldClose() const { return glfwWindowShouldClose(glfwWindow); }
 
-    int getWidth() const { return width; }
-    int getHeight() const { return height; }
+    int32_t getWidth() const { return width; }
+    int32_t getHeight() const { return height; }
     const std::string &getName() const { return name; }
     GLFWwindow *getGlfwWindow() const { return glfwWindow; }
     const VkSurfaceKHR getVkSurface() const { return vkSurface; }
+    inline uint32_t getNrImages() const { return swapchain->nrImages(); }
 
     uint32_t startFrame();
     void submitFrame(const std::vector<VkCommandBuffer>& cmdBuffers, uint32_t imageIdx);

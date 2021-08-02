@@ -72,10 +72,13 @@ public:
     VkCommandBuffer beginSingleTimeCommands();
     void submitSingleTimeCommands(VkCommandBuffer cmdBuffer);
     void singleTimeCommands(const std::function<void(VkCommandBuffer)>& callback);
+    void createDeviceImage(VkImageCreateInfo imageInfo, VkImage* image, VmaAllocation* memory);
 
     const VkInstance getVkInstance() const { return vkInstance; }
     const VkPhysicalDevice getVkPhysicalDevice() const { return vkPhysicalDevice; }
     const VkDevice getVkDevice() const { return vkDevice; }
+    const VmaAllocator getVmaAllocator() const { return vmaAllocator; }
+
     const QueueFamilyIndices &getQueueFamilyIndices() const { return queueFamilyIndices; }
     VkQueue getComputeQueue() const { return computeQueue; }
     VkQueue getGraphicsQueue() const { return graphicsQueue; }

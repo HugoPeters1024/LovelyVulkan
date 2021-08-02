@@ -28,6 +28,7 @@ Device::~Device() {
     windows.clear();
     glfwTerminate();
     vkDestroyCommandPool(vkDevice, vkCommandPool, nullptr);
+    vmaDestroyAllocator(vmaAllocator);
     vkDestroyDevice(vkDevice, nullptr);
     vkDestroyInstance(vkInstance, nullptr);
 }
@@ -185,6 +186,11 @@ void Device::singleTimeCommands(const std::function<void(VkCommandBuffer)>& call
     auto cmdBuffer = beginSingleTimeCommands();
     callback(cmdBuffer);
     submitSingleTimeCommands(cmdBuffer);
+}
+
+void Device::createDeviceImage(VkImageCreateInfo imageInfo, VkImage *image, VmaAllocation *memory) {
+    VmaAllocationCreateInfo allocInfo { .usage = VMA_MEMORY_USAGE_GPU_ONLY, };
+    vkCheck(vmaCreateImage(vmaAllocator, &imageInfo, &allocInfo, image, memory, nullptr));
 }
 
 std::string Device::getDeviceName() const {
