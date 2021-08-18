@@ -8,8 +8,20 @@ int main(int argc, char** argv) {
     lv::AttachmentView attachment{};
     lv::RenderPassCore renderPass(device);
     renderPass.bindToWindow(window)
-              .addAttachment(&attachment, VK_FORMAT_R8G8B8A8_SNORM, 0)
+              .addWindowAttachment(&attachment, window, 0)
               .build();
+
+    lv::ComputeShaderCore core;
+    core.duplication = window->getNrImages();
+    core.filename = "app/shaders_bin/test.comp.spv";
+
+    lv::ComputeShader compute(device, core);
+    lv::ComputeShaderBindingSet bindingSet;
+
+    compute.createBindingSet(&bindingSet);
+    bindingSet.bindImage(0, window->get)
+
+
 
     while (!window->shouldClose()) {
         uint32_t imageIdx = window->startFrame();

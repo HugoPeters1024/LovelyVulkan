@@ -1,5 +1,6 @@
 #pragma once
 #include "precomp.h"
+#include "Structs.hpp"
 #include "Device.h"
 #include "Swapchain.h"
 
@@ -36,6 +37,8 @@ public:
     GLFWwindow *getGlfwWindow() const { return glfwWindow; }
     const VkSurfaceKHR getVkSurface() const { return vkSurface; }
     inline uint32_t getNrImages() const { return swapchain->nrImages(); }
+    inline AttachmentView getColorAttachmentView(uint32_t binding) const { return swapchain->getColorAttachmentView(binding); }
+
 
     uint32_t startFrame();
     void submitFrame(const std::vector<VkCommandBuffer>& cmdBuffers, uint32_t imageIdx);

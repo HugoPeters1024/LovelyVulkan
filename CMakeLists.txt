@@ -4,16 +4,6 @@ project(liftedvulkan)
 set(CMAKE_CXX_STANDARD 20)
 file(GLOB_RECURSE src CONFIGURE_DEPENDS "include/*.h" "include/*.hpp" "src/*.cpp")
 
-macro(shader)
-    add_custom_command(
-            OUTPUT assets/shaders_bin/${ARGV0}.spv
-            DEPENDS assets/shaders/${ARGV0}
-            COMMAND /usr/bin/glslc
-            ARGS ${CMAKE_SOURCE_DIR}/assets/shaders/${ARGV0} -o ${CMAKE_SOURCE_DIR}/assets/shaders_bin/${ARGV0}.spv -O
-            COMMENT building shaders
-            VERBATIM)
-    SET(src ${src} assets/shaders_bin/${ARGV0}.spv)
-endmacro()
 
 add_library(liftedvulkan ${src})
 target_precompile_headers(liftedvulkan PRIVATE include/precomp.h)

@@ -1,6 +1,7 @@
 #pragma once
 #include "precomp.h"
 #include "DummyWindow.h"
+#include "Utils.h"
 
 namespace lv {
 
@@ -47,6 +48,7 @@ private:
     void createLogicalDevice();
     void createVmaAllocator();
     void createCommandPool();
+    void createDescriptorPool();
 
     static QueueFamilyIndices findQueueFamilyIndices(VkPhysicalDevice device, VkSurfaceKHR surface);
 
@@ -59,6 +61,7 @@ private:
     VmaAllocator vmaAllocator;
     QueueFamilyIndices queueFamilyIndices;
     VkCommandPool vkCommandPool;
+    VkDescriptorPool vkDescriptorPool;
 
     std::vector<std::unique_ptr<Window>> windows;
 
@@ -73,16 +76,20 @@ public:
     void submitSingleTimeCommands(VkCommandBuffer cmdBuffer);
     void singleTimeCommands(const std::function<void(VkCommandBuffer)>& callback);
     void createDeviceImage(VkImageCreateInfo imageInfo, VkImage* image, VmaAllocation* memory);
+    VkShaderModule createShaderModule(const std::string& filename) const;
 
     const VkInstance getVkInstance() const { return vkInstance; }
     const VkPhysicalDevice getVkPhysicalDevice() const { return vkPhysicalDevice; }
     const VkDevice getVkDevice() const { return vkDevice; }
     const VmaAllocator getVmaAllocator() const { return vmaAllocator; }
+    const VkDescriptorPool getVkDescriptorPool() const { return vkDescriptorPool; };
+
 
     const QueueFamilyIndices &getQueueFamilyIndices() const { return queueFamilyIndices; }
     VkQueue getComputeQueue() const { return computeQueue; }
     VkQueue getGraphicsQueue() const { return graphicsQueue; }
     VkQueue getPresentQueue() const { return presentQueue; }
+
 };
 
 }

@@ -1,32 +1,10 @@
 #include "precomp.h"
 #include "Device.h"
 #include "Window.h"
+#include "Structs.hpp"
 
 namespace lv {
 
-struct AttachmentView {
-    VkFormat* format;
-    uint32_t* binding;
-    std::vector<VkImage>* images;
-    std::vector<VkImageView>* imageViews;
-};
-
-struct ColorAttachment {
-    VkFormat format;
-    uint32_t binding;
-    std::vector<VkImage> images;
-    std::vector<VmaAllocation> imagesMemory;
-    std::vector<VkImageView> imageViews;
-
-    inline AttachmentView createView() {
-        return AttachmentView {
-            .format = &format,
-            .binding = &binding,
-            .images = &images,
-            .imageViews = &imageViews,
-        };
-    }
-};
 
 class RenderPassCore : NoCopy {
 private:
@@ -39,6 +17,7 @@ private:
     uint32_t width, height, duplication;
 
     std::vector<ColorAttachment> attachments;
+    std::vector<AttachmentView> attachmentViews;
 
     // Resulting pass
     VkRenderPass renderPass;
@@ -59,8 +38,15 @@ public:
         attachments.push_back(ColorAttachment {
             .format = format,
             .binding = binding,
+            .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         });
-        *view = attachments.back().createView();
+        attachmentViews.push_back(attachments.back().createView());
+        *view = attachmentViews.back();
+        return *this;
+    }
+    inline RenderPassCore& addWindowAttachment(AttachmentView* view, Window* window, uint32_t binding) {
+        attachmentViews.push_back(window->getColorAttachmentView(binding));
+        *view = attachmentViews.back();
         return *this;
     }
 

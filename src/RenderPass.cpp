@@ -51,24 +51,24 @@ void RenderPassCore::createAttachments() {
 }
 
 void RenderPassCore::createRenderPass() {
-    VkAttachmentDescription attachmentDescriptions[attachments.size()];
-    VkAttachmentReference attachmentReferences[attachments.size()];
+    VkAttachmentDescription attachmentDescriptions[attachmentViews.size()];
+    VkAttachmentReference attachmentReferences[attachmentViews.size()];
 
-    for(int i=0; i<attachments.size(); i++) {
-        attachmentDescriptions[i] = vks::initializers::attachmentDescription(attachments[i].format, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-        attachmentReferences[i] = vks::initializers::attachmentReference(attachments[i].binding, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    for(int i=0; i<attachmentViews.size(); i++) {
+        attachmentDescriptions[i] = vks::initializers::attachmentDescription(attachmentViews[i].format, attachmentViews[i].finalLayout);
+        attachmentReferences[i] = vks::initializers::attachmentReference(attachmentViews[i].binding, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
     }
 
     VkSubpassDescription subpassInfo {
         .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-        .colorAttachmentCount = static_cast<uint32_t>(attachments.size()),
+        .colorAttachmentCount = static_cast<uint32_t>(attachmentViews.size()),
         .pColorAttachments = attachmentReferences,
         .pDepthStencilAttachment = nullptr,
     };
 
     VkRenderPassCreateInfo renderPassInfo {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-        .attachmentCount = static_cast<uint32_t>(attachments.size()),
+        .attachmentCount = static_cast<uint32_t>(attachmentViews.size()),
         .pAttachments = attachmentDescriptions,
         .subpassCount = 1,
         .pSubpasses = &subpassInfo,
@@ -81,16 +81,16 @@ void RenderPassCore::createRenderPass() {
 void RenderPassCore::createFramebuffers() {
     framebuffers.resize(duplication);
     for(uint32_t i=0; i<duplication; i++) {
-        VkImageView attachmentViews[attachments.size()];
-        for(uint32_t j=0; j<attachments.size(); j++) {
-            attachmentViews[j] = attachments[j].imageViews[i];
+        VkImageView views[attachmentViews.size()];
+        for(uint32_t j=0; j<attachmentViews.size(); j++) {
+            views[j] = (*attachmentViews[j].imageViews)[j];
         }
 
         VkFramebufferCreateInfo framebufferInfo {
             .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
             .renderPass = renderPass,
-            .attachmentCount = static_cast<uint32_t>(attachments.size()),
-            .pAttachments = attachmentViews,
+            .attachmentCount = static_cast<uint32_t>(attachmentViews.size()),
+            .pAttachments = views,
             .width = width,
             .height = height,
             .layers = 1,

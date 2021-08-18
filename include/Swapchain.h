@@ -1,5 +1,6 @@
 #pragma once
 #include "precomp.h"
+#include "Structs.hpp"
 #include "Device.h"
 
 namespace lv {
@@ -42,9 +43,18 @@ public:
     uint32_t nrImages() const { return static_cast<uint32_t>(vkImages.size()); }
     const VkSurfaceFormatKHR &getSurfaceFormat() const { return surfaceFormat; }
     const VkExtent2D &getExtent() const { return extent; }
+    inline AttachmentView getColorAttachmentView(uint32_t binding) {
+        return AttachmentView {
+            .format = surfaceFormat.format,
+            .binding = binding,
+            .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+            .images = &vkImages,
+            .imageViews = &vkImageViews,
+        };
+    }
 
     VkResult startFrame(uint32_t* imageIdx);
-    VkResult submitFrame(const std::vector<VkCommandBuffer> cmdBuffers, uint32_t imageIdx);
+    VkResult submitFrame(std::vector<VkCommandBuffer> cmdBuffers, uint32_t imageIdx);
 };
 
 }

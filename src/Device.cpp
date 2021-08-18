@@ -20,6 +20,7 @@ Device::Device(lv::DeviceInfo info) : info(std::move(info)) {
     createLogicalDevice();
     createVmaAllocator();
     createCommandPool();
+    createDescriptorPool();
     logger::info("Device setup and ready for use");
 }
 
@@ -28,6 +29,7 @@ Device::~Device() {
     windows.clear();
     glfwTerminate();
     vkDestroyCommandPool(vkDevice, vkCommandPool, nullptr);
+    vkDestroyDescriptorPool(vkDevice, vkDescriptorPool, nullptr);
     vmaDestroyAllocator(vmaAllocator);
     vkDestroyDevice(vkDevice, nullptr);
     vkDestroyInstance(vkInstance, nullptr);
@@ -136,6 +138,32 @@ void Device::createCommandPool() {
     vkCheck(vkCreateCommandPool(vkDevice, &createInfo, nullptr, &vkCommandPool));
 }
 
+void Device::createDescriptorPool() {
+    VkDescriptorPoolSize pool_sizes[] =
+            {
+            { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
+            { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
+            { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
+            { VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
+            { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
+            { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
+            { VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
+            };
+
+    VkDescriptorPoolCreateInfo poolInfo {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .maxSets = 100,
+        .poolSizeCount = std::size(pool_sizes),
+        .pPoolSizes = pool_sizes,
+        };
+
+    vkCheck(vkCreateDescriptorPool(vkDevice, &poolInfo, nullptr, &vkDescriptorPool));
+}
+
 QueueFamilyIndices Device::findQueueFamilyIndices(VkPhysicalDevice device, VkSurfaceKHR surface) {
     QueueFamilyIndices ret{};
 
@@ -191,6 +219,20 @@ void Device::singleTimeCommands(const std::function<void(VkCommandBuffer)>& call
 void Device::createDeviceImage(VkImageCreateInfo imageInfo, VkImage *image, VmaAllocation *memory) {
     VmaAllocationCreateInfo allocInfo { .usage = VMA_MEMORY_USAGE_GPU_ONLY, };
     vkCheck(vmaCreateImage(vmaAllocator, &imageInfo, &allocInfo, image, memory, nullptr));
+}
+
+VkShaderModule Device::createShaderModule(const std::string &filename) const {
+    auto code = readFile(filename);
+    logger::debug("Shader module {} contains {} bytes", filename, code.size());
+    VkShaderModuleCreateInfo moduleInfo {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .codeSize = code.size(),
+        .pCode = reinterpret_cast<const uint32_t*>(code.data()),
+    };
+
+    VkShaderModule module;
+    vkCheck(vkCreateShaderModule(vkDevice, &moduleInfo, nullptr, &module));
+    return module;
 }
 
 std::string Device::getDeviceName() const {
