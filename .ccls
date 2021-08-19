@@ -1,0 +1,13 @@
+clang
+
+# add this to support `.h` files as C++ headers
+%h -x c++-header
+
+-I./include
+-I./external/glm/glm
+-I./external/glfw/include
+-I./external/vks/vks/
+-I./external/imgui/imgui/
+-I./external/spdlog/include
+-I/usr/bin/include
+-std=c++17
