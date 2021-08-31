@@ -55,8 +55,7 @@ const FrameContext* nextFrame(Window& window) {
 
     vkWaitForFences(window.ctx->vkDevice, 1, &window.swapchain.inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
 
-    uint32_t imageIdx;
-    auto result = vkAcquireNextImageKHR(window.ctx->vkDevice, window.swapchain.vkSwapchain, UINT64_MAX, window.swapchain.imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIdx);
+    auto result = vkAcquireNextImageKHR(window.ctx->vkDevice, window.swapchain.vkSwapchain, UINT64_MAX, window.swapchain.imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &window.swapchain.imageIdx);
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR) {
         initSwapchain(window);
@@ -66,10 +65,24 @@ const FrameContext* nextFrame(Window& window) {
         exit(1);
     }
 
-    if (window.swapchain.imagesInFlight[imageIdx]) {
-        vkCheck(vkWaitForFences(window.ctx->vkDevice, 1, &window.swapchain.imagesInFlight[imageIdx], VK_TRUE, UINT64_MAX));
+    auto& frame = window.swapchain.frameContexts[currentFrame];
+    vkCheck(vkResetCommandBuffer(frame.commandBuffer, 0));
+    auto beginInfo = vks::initializers::commandBufferBeginInfo();
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    vkCheck(vkBeginCommandBuffer(frame.commandBuffer, &beginInfo));
+    return &frame;
+}
+
+void commitFrame(Window& window) {
+    auto& currentFrame = window.swapchain.currentFrame;
+    auto& frame = window.swapchain.frameContexts[currentFrame];
+    vkEndCommandBuffer(frame.commandBuffer);
+
+    if (window.swapchain.imagesInFlight[window.swapchain.imageIdx]) {
+        vkCheck(vkWaitForFences(window.ctx->vkDevice, 1, &window.swapchain.imagesInFlight[window.swapchain.imageIdx], VK_TRUE, UINT64_MAX));
     }
-    window.swapchain.imagesInFlight[imageIdx] = window.swapchain.inFlightFences[currentFrame];
+;
+    window.swapchain.imagesInFlight[window.swapchain.imageIdx] = window.swapchain.inFlightFences[currentFrame];
     auto submitInfo = vks::initializers::submitInfo(&window.swapchain.frameContexts[currentFrame].commandBuffer);
     submitInfo.waitSemaphoreCount = 1;
     submitInfo.pWaitSemaphores = &window.swapchain.imageAvailableSemaphores[currentFrame];
@@ -87,14 +100,12 @@ const FrameContext* nextFrame(Window& window) {
             .pWaitSemaphores = &window.swapchain.renderFinishedSemaphores[currentFrame],
             .swapchainCount = 1,
             .pSwapchains = &window.swapchain.vkSwapchain,
-            .pImageIndices = &imageIdx,
+            .pImageIndices = &window.swapchain.imageIdx,
             .pResults = nullptr,
     };
 
     currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
     vkCheck(vkQueuePresentKHR(window.ctx->queues.present, &presentInfo));
-
-    return nullptr;
 }
 
 void getFramebufferSize(const Window& window, int32_t* width, int32_t* height) {

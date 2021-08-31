@@ -49,6 +49,7 @@ struct Window : NoCopy {
 
     struct {
         uint32_t currentFrame = 0;
+        uint32_t imageIdx = 0;
         VkSwapchainKHR vkSwapchain = VK_NULL_HANDLE;
         std::vector<VkSemaphore> imageAvailableSemaphores;
         std::vector<VkSemaphore> renderFinishedSemaphores;

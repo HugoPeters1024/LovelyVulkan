@@ -11,6 +11,7 @@ int main(int argc, char** argv) {
 
     while(!lv::windowShouldClose(window)) {
         auto frameContext = lv::nextFrame(window);
+        lv::commitFrame(window);
     }
 
     logger::info("Goodbye!");

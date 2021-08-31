@@ -9,6 +9,7 @@ namespace lv {
     void destroyWindow(Window& window);
     bool windowShouldClose(const Window& window);
     const FrameContext* nextFrame(Window& window);
+    void commitFrame(Window& window);
     void getFramebufferSize(const Window& window, int32_t* width, int32_t* height);
 }
 
