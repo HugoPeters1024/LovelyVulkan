@@ -1,7 +1,12 @@
 .idea
 **/cmake-build-debug
 **/cmake-build-release
+**/cmake-build-Debug
+**/cmake-build-Release
 **/cmake-build-relwithdebinfo
 assets/shaders_bin
+
+compile_commands.json
+.ccls
 
 imgui.ini
