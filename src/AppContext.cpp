@@ -10,44 +10,33 @@ static struct {
 } windowHelper;
 
 
-static void initWindowingSystem();
-static void finalizeInfo(AppContextInfo& info);
-static void createInstance(AppContextInfo& info, AppContext& ctx); 
-static void createWindowSurface(AppContext& ctx);
-static void pickPhysicalDevice(AppContextInfo& info, AppContext& ctx);
-static void findQueueFamilies(AppContext& ctx);
-static void createLogicalDevice(AppContextInfo& info, AppContext& ctx);
-static void cleanWindowHelper(AppContext& ctx);
-static void createCommandPool(AppContext& ctx);
-static void createDescriptorPool(AppContext& ctx);
-
 static bool checkValidationLayersSupported(const std::vector<const char*>& layers);
 static bool deviceExtensionsSupported(VkPhysicalDevice physicalDevice, const std::set<const char*>& extensions);
 
-void createAppContext(AppContextInfo& info, AppContext& ctx) {
+AppContext::AppContext(AppContextInfo info) 
+    : info(info) {
     initWindowingSystem();
-    finalizeInfo(info);
-    createInstance(info, ctx);
-    createWindowSurface(ctx);
-    pickPhysicalDevice(info, ctx);
-    findQueueFamilies(ctx);
-    createLogicalDevice(info, ctx);
-    cleanWindowHelper(ctx);
-    createCommandPool(ctx);
-    createDescriptorPool(ctx);
+    finalizeInfo();
+    createInstance();
+    createWindowSurface();
+    pickPhysicalDevice();
+    findQueueFamilies();
+    createLogicalDevice();
+    cleanupWindowHelper();
+    createVmaAllocator();
+    createCommandPool();
+    createDescriptorPool();
 }
 
-void destroyAppContext(AppContext& ctx) {
-    vkDeviceWaitIdle(ctx.vkDevice);
-    vkDestroyDescriptorPool(ctx.vkDevice, ctx.vkDescriptorPool, nullptr);
-    vkDestroyCommandPool(ctx.vkDevice, ctx.vkCommandPool, nullptr);
-    vkDestroyDevice(ctx.vkDevice, nullptr);
-    vkDestroyInstance(ctx.vkInstance, nullptr);
+AppContext::~AppContext() {
+    vkDeviceWaitIdle(vkDevice);
+    vkDestroyDescriptorPool(vkDevice, vkDescriptorPool, nullptr);
+    vkDestroyCommandPool(vkDevice, vkCommandPool, nullptr);
+    vkDestroyDevice(vkDevice, nullptr);
+    vkDestroyInstance(vkInstance, nullptr);
 }
 
-// ---------- INTERNAL HELPER FUNCTIONS --------------
-
-static void initWindowingSystem() {
+void AppContext::initWindowingSystem() {
     // Is idempotent on multiple calls
     if (!glfwInit()) {
         logger::error("Cannot initialize GLFW");
@@ -60,8 +49,7 @@ static void initWindowingSystem() {
     assert(windowHelper.window && "System could not create a window");
 }
 
-
-static void finalizeInfo(AppContextInfo& info) {
+void AppContext::finalizeInfo() {
 #ifndef NDEBUG
     info.validationLayers.insert("VK_LAYER_KHRONOS_validation");
 #endif
@@ -77,31 +65,7 @@ static void finalizeInfo(AppContextInfo& info) {
     }
 }
 
-static bool checkValidationLayersSupported(const std::vector<const char*>& layers) {
-    uint32_t layerCount;
-    vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
-    VkLayerProperties availableLayers[layerCount];
-    vkEnumerateInstanceLayerProperties(&layerCount, availableLayers);
-
-    for (const char* layerName : layers) {
-        bool layerFound = false;
-
-        for (const auto& layerProperties : availableLayers) {
-            if (strcmp(layerName, layerProperties.layerName) == 0) {
-                layerFound = true;
-                break;
-            }
-        }
-
-        if (!layerFound) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-static void createInstance(AppContextInfo& info, AppContext& ctx) {
+void AppContext::createInstance() {
     std::vector<const char*> validationLayers(info.validationLayers.begin(), info.validationLayers.end());
     std::vector<const char*> instanceExtensions(info.instanceExtensions.begin(), info.instanceExtensions.end());
 
@@ -128,78 +92,64 @@ static void createInstance(AppContextInfo& info, AppContext& ctx) {
         .ppEnabledExtensionNames = instanceExtensions.data(),
     };
 
-    vkCheck(vkCreateInstance(&createInfo, nullptr, &ctx.vkInstance));
+    vkCheck(vkCreateInstance(&createInfo, nullptr, &vkInstance));
 }
 
-static void createWindowSurface(AppContext& ctx) {
-    vkCheck(glfwCreateWindowSurface(ctx.vkInstance, windowHelper.window, nullptr, &windowHelper.surface));
+void AppContext::createWindowSurface() {
+    vkCheck(glfwCreateWindowSurface(vkInstance, windowHelper.window, nullptr, &windowHelper.surface));
 }
 
-static void pickPhysicalDevice(AppContextInfo& info, AppContext& ctx) {
+void AppContext::pickPhysicalDevice() {
     uint deviceCount = 0;
-    vkEnumeratePhysicalDevices(ctx.vkInstance, &deviceCount, nullptr);
+    vkEnumeratePhysicalDevices(vkInstance, &deviceCount, nullptr);
 
     if (deviceCount == 0) {
         throw std::runtime_error("No devices with vulkan support found");
     }
 
     VkPhysicalDevice devices[deviceCount];
-    vkEnumeratePhysicalDevices(ctx.vkInstance, &deviceCount, devices);
+    vkEnumeratePhysicalDevices(vkInstance, &deviceCount, devices);
 
-    ctx.vkPhysicalDevice = devices[0];
+    vkPhysicalDevice = devices[0];
     VkPhysicalDeviceProperties properties;
-    vkGetPhysicalDeviceProperties(ctx.vkPhysicalDevice, &properties);
+    vkGetPhysicalDeviceProperties(vkPhysicalDevice, &properties);
 
     logger::info("Selected GPU: {}", properties.deviceName);
 }
 
-static bool deviceExtensionsSupported(VkPhysicalDevice physicalDevice, const std::set<const char*>& extensions) {
-    uint extensionCount;
-    vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &extensionCount, nullptr);
-    VkExtensionProperties availableExtensions[extensionCount];
-    vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &extensionCount, availableExtensions);
 
-    std::set<std::string> requiredExtensions(extensions.begin(), extensions.end());
-
-    for(const auto& extension : availableExtensions) {
-        requiredExtensions.erase(extension.extensionName);
-    }
-
-    return requiredExtensions.empty();
-}
-
-static void findQueueFamilies(AppContext& ctx) {
+void AppContext::findQueueFamilies() {
     uint32_t queueFamilyCount;
-    vkGetPhysicalDeviceQueueFamilyProperties(ctx.vkPhysicalDevice, &queueFamilyCount, nullptr);
+    vkGetPhysicalDeviceQueueFamilyProperties(vkPhysicalDevice, &queueFamilyCount, nullptr);
     VkQueueFamilyProperties properties[queueFamilyCount];
-    vkGetPhysicalDeviceQueueFamilyProperties(ctx.vkPhysicalDevice, &queueFamilyCount, properties);
+    vkGetPhysicalDeviceQueueFamilyProperties(vkPhysicalDevice, &queueFamilyCount, properties);
 
     for(uint i=0; i<queueFamilyCount; i++) {
         const auto& queueFamily = properties[i];
-        if ((queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT) && !ctx.queueFamilies.compute.has_value()) {
+        if ((queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT) && !queueFamilies.compute.has_value()) {
             logger::debug("Compute supported on GPU on queue {}", i);
-            ctx.queueFamilies.compute = i;
+            queueFamilies.compute = i;
         }
-        if ((queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) && !ctx.queueFamilies.graphics.has_value()) {
+        if ((queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) && !queueFamilies.graphics.has_value()) {
             logger::debug("Graphics supported on GPU on queue {}", i);
-            ctx.queueFamilies.graphics = i;
+            queueFamilies.graphics = i;
         }
 
         VkBool32 presentSupport = false;
-        vkGetPhysicalDeviceSurfaceSupportKHR(ctx.vkPhysicalDevice, i, windowHelper.surface, &presentSupport);
-        if (presentSupport && !ctx.queueFamilies.present.has_value()) {
+        vkGetPhysicalDeviceSurfaceSupportKHR(vkPhysicalDevice, i, windowHelper.surface, &presentSupport);
+        if (presentSupport && !queueFamilies.present.has_value()) {
             logger::debug("Presentation supported on GPU on queue {}", i);
-            ctx.queueFamilies.present = i;
+            queueFamilies.present = i;
         }
     }
 }
 
-static void createLogicalDevice(AppContextInfo& info, AppContext& ctx) {
+void AppContext::createLogicalDevice() {
     std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
     std::set<uint> uniqueQueueFamilies = {
-            ctx.queueFamilies.compute.value(),
-            ctx.queueFamilies.graphics.value(),
-            ctx.queueFamilies.present.value(),
+            queueFamilies.compute.value(),
+            queueFamilies.graphics.value(),
+            queueFamilies.present.value(),
     };
 
     queueCreateInfos.reserve(uniqueQueueFamilies.size());
@@ -219,7 +169,7 @@ static void createLogicalDevice(AppContextInfo& info, AppContext& ctx) {
     };
 
     std::vector<const char*> devicesExtensions(info.deviceExtensions.begin(), info.deviceExtensions.end());
-    if (!deviceExtensionsSupported(ctx.vkPhysicalDevice, info.deviceExtensions)) {
+    if (!deviceExtensionsSupported(vkPhysicalDevice, info.deviceExtensions)) {
         logger::error("Not all device extensions supported");
         exit(1);
     }
@@ -234,29 +184,40 @@ static void createLogicalDevice(AppContextInfo& info, AppContext& ctx) {
     };
 
 
-    VkResult res = (vkCreateDevice(ctx.vkPhysicalDevice, &createInfo, nullptr, &ctx.vkDevice));
+    VkResult res = (vkCreateDevice(vkPhysicalDevice, &createInfo, nullptr, &vkDevice));
 
-    vkGetDeviceQueue(ctx.vkDevice, ctx.queueFamilies.compute.value(), 0, &ctx.queues.compute);
-    vkGetDeviceQueue(ctx.vkDevice, ctx.queueFamilies.graphics.value(), 0, &ctx.queues.graphics);
-    vkGetDeviceQueue(ctx.vkDevice, ctx.queueFamilies.present.value(), 0, &ctx.queues.present);
+    vkGetDeviceQueue(vkDevice, queueFamilies.compute.value(), 0, &queues.compute);
+    vkGetDeviceQueue(vkDevice, queueFamilies.graphics.value(), 0, &queues.graphics);
+    vkGetDeviceQueue(vkDevice, queueFamilies.present.value(), 0, &queues.present);
 }    
 
-static void cleanWindowHelper(AppContext& ctx) {
-    vkDestroySurfaceKHR(ctx.vkInstance, windowHelper.surface, nullptr);
+void AppContext::cleanupWindowHelper() {
+    vkDestroySurfaceKHR(vkInstance, windowHelper.surface, nullptr);
     glfwDestroyWindow(windowHelper.window);
 }
 
-static void createCommandPool(AppContext& ctx) {
+void AppContext::createVmaAllocator() {
+    VmaAllocatorCreateInfo allocatorInfo {
+        .flags = VMA_ALLOCATOR_CREATE_KHR_DEDICATED_ALLOCATION_BIT,
+        .physicalDevice = vkPhysicalDevice,
+        .device = vkDevice,
+        .instance = vkInstance,
+        .vulkanApiVersion = VK_API_VERSION_1_2,
+    };
+    vmaCreateAllocator(&allocatorInfo, &vmaAllocator);
+}
+
+void AppContext::createCommandPool() {
     VkCommandPoolCreateInfo createInfo {
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-        .queueFamilyIndex = ctx.queueFamilies.graphics.value(),
+        .queueFamilyIndex = queueFamilies.graphics.value(),
     };
 
-    vkCheck(vkCreateCommandPool(ctx.vkDevice, &createInfo, nullptr, &ctx.vkCommandPool));
+    vkCheck(vkCreateCommandPool(vkDevice, &createInfo, nullptr, &vkCommandPool));
 }
 
-static void createDescriptorPool(AppContext& ctx) {
+void AppContext::createDescriptorPool() {
     VkDescriptorPoolSize pool_sizes[] =
             {
                     { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
@@ -279,8 +240,54 @@ static void createDescriptorPool(AppContext& ctx) {
             .pPoolSizes = pool_sizes,
     };
 
-    vkCheck(vkCreateDescriptorPool(ctx.vkDevice, &poolInfo, nullptr, &ctx.vkDescriptorPool));
+    vkCheck(vkCreateDescriptorPool(vkDevice, &poolInfo, nullptr, &vkDescriptorPool));
 }
+
+
+// ---------- INTERNAL HELPER FUNCTIONS --------------
+
+
+bool deviceExtensionsSupported(VkPhysicalDevice physicalDevice, const std::set<const char*>& extensions) {
+    uint extensionCount;
+    vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &extensionCount, nullptr);
+    VkExtensionProperties availableExtensions[extensionCount];
+    vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &extensionCount, availableExtensions);
+
+    std::set<std::string> requiredExtensions(extensions.begin(), extensions.end());
+
+    for(const auto& extension : availableExtensions) {
+        requiredExtensions.erase(extension.extensionName);
+    }
+
+    return requiredExtensions.empty();
+}
+
+
+static bool checkValidationLayersSupported(const std::vector<const char*>& layers) {
+    uint32_t layerCount;
+    vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
+    VkLayerProperties availableLayers[layerCount];
+    vkEnumerateInstanceLayerProperties(&layerCount, availableLayers);
+
+    for (const char* layerName : layers) {
+        bool layerFound = false;
+
+        for (const auto& layerProperties : availableLayers) {
+            if (strcmp(layerName, layerProperties.layerName) == 0) {
+                layerFound = true;
+                break;
+            }
+        }
+
+        if (!layerFound) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+
 
 
 
