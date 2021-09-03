@@ -44,7 +44,7 @@ public:
         T* ext = new T(std::forward<Args>(args)...);
         ext->buildCore(*this);
         extensions.insert({typeid(T), ext});
-        extensionOrder.push_back(typeid(T));
+        extensionOrder.emplace_back(typeid(T));
         return ext;
     }
 

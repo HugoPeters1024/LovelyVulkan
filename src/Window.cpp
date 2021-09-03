@@ -17,7 +17,7 @@ Window::~Window() {
         auto it = ctx.extensionOrder.rbegin();
         while(it != ctx.extensionOrder.rend()) {
             auto ext = ctx.extensions[*it];
-            ext->destroyDowncastedFrame(ctx, frame.getExtFrame(*it));
+            ext->destroyDowncastedFrame(ctx, frame.getExtFrame(ext->frameType()));
             it++;
         }
         vkDestroyImageView(ctx.vkDevice, frame.swapchain.vkView, nullptr);

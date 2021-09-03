@@ -38,6 +38,7 @@ AppContext::~AppContext() {
         it++;
     }
 
+    vmaDestroyAllocator(vmaAllocator);
     vkDestroyDescriptorPool(vkDevice, vkDescriptorPool, nullptr);
     vkDestroyCommandPool(vkDevice, vkCommandPool, nullptr);
     vkDestroyDevice(vkDevice, nullptr);
