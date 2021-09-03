@@ -18,6 +18,7 @@ public:
     VkPhysicalDevice vkPhysicalDevice;
     VkDevice vkDevice;
     VmaAllocator vmaAllocator;
+    std::vector<std::type_index> extensionOrder;
     std::unordered_map<std::type_index, IAppExt*> extensions;
 
     struct {
@@ -39,15 +40,18 @@ public:
 
     template<class T, typename... Args>
     T* registerExtension(Args&&... args) {
+        static_assert(std::is_base_of<IAppExt, T>::value, "Extensions must be derived from IAppExt");
         T* ext = new T(std::forward<Args>(args)...);
         ext->buildCore(*this);
         extensions.insert({typeid(T), ext});
+        extensionOrder.push_back(typeid(T));
         return ext;
     }
 
     template<class T>
     T* getExtension() {
-        return dynamic_cast<T*>(extensions[typeid(T)]);
+        static_assert(std::is_base_of<IAppExt, T>::value, "Extensions must be derived from IAppExt");
+        return reinterpret_cast<T*>(extensions[typeid(T)]);
     }
 
 private:

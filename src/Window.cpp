@@ -5,7 +5,7 @@ namespace lv {
 
 
 Window::Window(AppContext& ctx, const char* name, int32_t width, int32_t height) 
-    : ctx(ctx) {
+    : ctx(ctx), width(width), height(height) {
     createWindow(name, width, height);
     createSwapchain();
     buildExtensionFrames();
@@ -14,6 +14,12 @@ Window::Window(AppContext& ctx, const char* name, int32_t width, int32_t height)
 Window::~Window() {
     vkDeviceWaitIdle(ctx.vkDevice);
     for(auto& frame : swapchain.frameContexts) {
+        auto it = ctx.extensionOrder.rbegin();
+        while(it != ctx.extensionOrder.rend()) {
+            auto ext = ctx.extensions[*it];
+            ext->destroyDowncastedFrame(ctx, frame.getExtFrame(*it));
+            it++;
+        }
         vkDestroyImageView(ctx.vkDevice, frame.swapchain.vkView, nullptr);
         vkDestroySemaphore(ctx.vkDevice, frame.swapchain.imageAvailableSemaphore, nullptr);
         vkDestroySemaphore(ctx.vkDevice, frame.swapchain.renderFinishedSemaphore, nullptr);
@@ -80,6 +86,8 @@ void Window::createSwapchain() {
     vkGetSwapchainImagesKHR(ctx.vkDevice, swapchain.vkSwapchain, &imageCount, images);
     for(uint32_t i=0; i<imageCount; i++) {
         swapchain.frameContexts.push_back(FrameContext(ctx));
+        swapchain.frameContexts[i].swapchain.width = width;
+        swapchain.frameContexts[i].swapchain.height = height;
         swapchain.frameContexts[i].swapchain.vkImage = images[i];
     }
 
@@ -112,9 +120,10 @@ void Window::createSwapchain() {
 }
 
 void Window::buildExtensionFrames() {
-    for(auto& pair : ctx.extensions) {
+    for(auto& idx : ctx.extensionOrder) {
+        auto& ext = ctx.extensions[idx];
         for(auto& frame : swapchain.frameContexts) {
-            frame.extensionFrame.insert({pair.second->frameType(), pair.second->buildDowncastedFrame(frame)});
+            frame.extensionFrame.insert({ext->frameType(), ext->buildDowncastedFrame(frame)});
         }
     }
 }

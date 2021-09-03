@@ -1,4 +1,3 @@
-
 #pragma once
 #include "precomp.h"
 #include "AppContext.h"
@@ -48,6 +47,7 @@ public:
     void buildCore(AppContext& ctx) override;
     void destroyCore(AppContext& ctx) override;
     ComputeFrame* buildFrame(FrameContext& frame) override;
+    void destroyFrame(AppContext& ctx, ComputeFrame*) override {}
 };
 
 }

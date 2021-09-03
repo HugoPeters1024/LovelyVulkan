@@ -1,4 +1,3 @@
-#include "vks/VulkanInitializers.hpp"
 #include <liftedvulkan.h>
 
 
@@ -8,8 +7,11 @@ int main(int argc, char** argv) {
     lv::AppContext ctx(info);
 
     lv::ComputeShaderInfo compInfo{};
-    compInfo.addImageBinding(0, [](lv::FrameContext& frame) { return &frame.swapchain.vkView; });
+    compInfo.addImageBinding(0, [](lv::FrameContext& frame) { 
+        return &frame.getExtFrame<lv::ImageStoreFrame>().view; 
+    });
 
+    auto imageStore = ctx.registerExtension<lv::ImageStore>();
     auto computeShader = ctx.registerExtension<lv::ComputeShader>("app/shaders_bin/test.comp.spv", compInfo);
 
     lv::Window window(ctx, "Lovely Vulkan", 640, 480);

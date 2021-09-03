@@ -22,6 +22,8 @@ struct FrameContext {
         VkSemaphore imageAvailableSemaphore;
         VkSemaphore renderFinishedSemaphore;
         VkFence inFlightFence;
+        uint32_t width;
+        uint32_t height;
     } swapchain;
     VkCommandBuffer commandBuffer;
 
@@ -32,6 +34,10 @@ struct FrameContext {
     template<typename T>
     T& getExtFrame() {
         return *reinterpret_cast<T*>(extensionFrame[typeid(T)]);
+    }
+
+    void* getExtFrame(std::type_index typeName) {
+        return extensionFrame[typeName];
     }
 };
 
@@ -81,4 +87,5 @@ private:
 };
 
 }
+
 

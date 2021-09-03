@@ -31,8 +31,11 @@ AppContext::AppContext(AppContextInfo info)
 
 AppContext::~AppContext() {
     vkDeviceWaitIdle(vkDevice);
-    for(auto& pair : extensions) {
-        pair.second->destroyCore(*this);
+    auto it = extensionOrder.rbegin();
+    while(it != extensionOrder.rend()) {
+        auto ext = extensions[*it];
+        ext->destroyCore(*this);
+        it++;
     }
 
     vkDestroyDescriptorPool(vkDevice, vkDescriptorPool, nullptr);
