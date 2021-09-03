@@ -1,40 +1,56 @@
 #pragma once
 #include "precomp.h"
+#include "AppExt.h"
 
 namespace lv {
-    struct AppContextInfo {
-        uint32_t apiVersion = VK_API_VERSION_1_2;
-        std::set<const char*> validationLayers;
-        std::set<const char*> instanceExtensions;
-        std::set<const char*> deviceExtensions;
-    };
 
-    class AppContext : NoCopy {
-    public:
-        AppContextInfo info;
-        VkInstance vkInstance;
-        VkPhysicalDevice vkPhysicalDevice;
-        VkDevice vkDevice;
-        VmaAllocator vmaAllocator;
+struct AppContextInfo {
+    uint32_t apiVersion = VK_API_VERSION_1_2;
+    std::set<const char*> validationLayers;
+    std::set<const char*> instanceExtensions;
+    std::set<const char*> deviceExtensions;
+};
 
-        struct {
-            std::optional<uint32_t> compute, graphics, present;
-        } queueFamilies;
+class AppContext : NoCopy {
+public:
+    AppContextInfo info;
+    VkInstance vkInstance;
+    VkPhysicalDevice vkPhysicalDevice;
+    VkDevice vkDevice;
+    VmaAllocator vmaAllocator;
+    std::unordered_map<std::type_index, IAppExt*> extensions;
 
-        struct {
-            VkQueue compute, graphics, present;
-        } queues;
+    struct {
+        std::optional<uint32_t> compute, graphics, present;
+    } queueFamilies;
 
-        VkCommandPool vkCommandPool;
-        VkDescriptorPool vkDescriptorPool;
+    struct {
+        VkQueue compute, graphics, present;
+    } queues;
 
-        struct {
-            VkSurfaceCapabilitiesKHR capabilities;
-            std::vector<VkSurfaceFormatKHR> formats;
-            std::vector<VkPresentModeKHR> presentModes;
-        } swapchainSupport;
+    VkCommandPool vkCommandPool;
+    VkDescriptorPool vkDescriptorPool;
 
-    private:
+    struct {
+        VkSurfaceCapabilitiesKHR capabilities;
+        std::vector<VkSurfaceFormatKHR> formats;
+        std::vector<VkPresentModeKHR> presentModes;
+    } swapchainSupport;
+
+    template<class T, typename... Args>
+    T* registerExtension(Args&&... args) {
+        T* ext = new T(std::forward<Args>(args)...);
+        ext->buildCore(*this);
+        extensions.insert({typeid(T), ext});
+        return ext;
+    }
+
+    template<class T>
+    T* getExtension() {
+        return dynamic_cast<T*>(extensions[typeid(T)]);
+    }
+
+private:
 
     // Will be invalid after construction
     struct {
@@ -42,24 +58,24 @@ namespace lv {
         VkSurfaceKHR surface;
     } windowHelper;
 
-    public:
-        AppContext(AppContextInfo info);
-        ~AppContext();
+public:
+    AppContext(AppContextInfo info);
+    ~AppContext();
 
-    private:
-        void initWindowingSystem();
-        void finalizeInfo();
-        void createInstance();
-        void createWindowSurface();
-        void pickPhysicalDevice();
-        void findQueueFamilies();
-        void createLogicalDevice();
-        void cleanupWindowHelper();
-        void createVmaAllocator();
-        void createCommandPool();
-        void createDescriptorPool();
+    VkShaderModule createShaderModule(const char* filePath) const;
 
+private:
+    void initWindowingSystem();
+    void finalizeInfo();
+    void createInstance();
+    void createWindowSurface();
+    void pickPhysicalDevice();
+    void findQueueFamilies();
+    void createLogicalDevice();
+    void cleanupWindowHelper();
+    void createVmaAllocator();
+    void createCommandPool();
+    void createDescriptorPool();
+};
 
-    };
-}
-
+};

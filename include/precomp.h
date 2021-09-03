@@ -19,6 +19,7 @@ typedef unsigned char uchar;
 #include <limits>
 #include <utility>
 #include <optional>
+#include <typeindex>
 
 // GLFW
 #define GLFW_INCLUDE_VULKAN

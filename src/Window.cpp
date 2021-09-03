@@ -8,6 +8,7 @@ Window::Window(AppContext& ctx, const char* name, int32_t width, int32_t height)
     : ctx(ctx) {
     createWindow(name, width, height);
     createSwapchain();
+    buildExtensionFrames();
 }
 
 Window::~Window() {
@@ -74,11 +75,11 @@ void Window::createSwapchain() {
     vkCheck(vkCreateSwapchainKHR(ctx.vkDevice, &createInfo, nullptr, &swapchain.vkSwapchain));
 
     vkGetSwapchainImagesKHR(ctx.vkDevice, swapchain.vkSwapchain, &imageCount, nullptr);
-    swapchain.frameContexts.resize(imageCount);
 
     VkImage images[imageCount];
     vkGetSwapchainImagesKHR(ctx.vkDevice, swapchain.vkSwapchain, &imageCount, images);
     for(uint32_t i=0; i<imageCount; i++) {
+        swapchain.frameContexts.push_back(FrameContext(ctx));
         swapchain.frameContexts[i].swapchain.vkImage = images[i];
     }
 
@@ -86,6 +87,7 @@ void Window::createSwapchain() {
     for(uint32_t i=0; i<imageCount; i++) {
         auto& frame = swapchain.frameContexts[i];
         auto viewInfo = vks::initializers::imageViewCreateInfo(frame.swapchain.vkImage, swapchain.surfaceFormat.format, VK_IMAGE_ASPECT_COLOR_BIT);
+
         vkCheck(vkCreateImageView(ctx.vkDevice, &viewInfo, nullptr, &frame.swapchain.vkView));
     }
 
@@ -99,12 +101,21 @@ void Window::createSwapchain() {
         vkCheck(vkCreateSemaphore(ctx.vkDevice, &semInfo, nullptr, &frame.swapchain.renderFinishedSemaphore));
         vkCheck(vkCreateFence(ctx.vkDevice, &fenceInfo, nullptr, &frame.swapchain.inFlightFence));
     }
+    swapchain.imagesInFlight.resize(MAX_FRAMES_IN_FLIGHT, VK_NULL_HANDLE);
 
     // create the command buffers
     for(uint32_t i=0; i<imageCount; i++) {
         auto& frame = swapchain.frameContexts[i];
         auto allocInfo = vks::initializers::commandBufferAllocateInfo(ctx.vkCommandPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1);
         vkCheck(vkAllocateCommandBuffers(ctx.vkDevice, &allocInfo, &frame.commandBuffer));
+    }
+}
+
+void Window::buildExtensionFrames() {
+    for(auto& pair : ctx.extensions) {
+        for(auto& frame : swapchain.frameContexts) {
+            frame.extensionFrame.insert({pair.second->frameType(), pair.second->buildDowncastedFrame(frame)});
+        }
     }
 }
 
@@ -210,6 +221,11 @@ void Window::nextFrame(std::function<void(FrameContext&)> callback) {
     callback(frame);
 
     vkEndCommandBuffer(frame.commandBuffer);
+
+    if (swapchain.imagesInFlight[swapchain.imageIdx] != VK_NULL_HANDLE) {
+        vkWaitForFences(ctx.vkDevice, 1, &swapchain.imagesInFlight[swapchain.currentFrame], VK_TRUE, UINT64_MAX);
+    }
+    swapchain.imagesInFlight[swapchain.imageIdx] = frame.swapchain.inFlightFence;
 
     auto submitInfo = vks::initializers::submitInfo(&frame.commandBuffer);
     submitInfo.waitSemaphoreCount = 1;

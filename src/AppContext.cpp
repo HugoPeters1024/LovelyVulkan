@@ -1,6 +1,7 @@
 #include "AppContext.h"
 #define VMA_IMPLEMENTATION
 #include <vks/vk_mem_alloc.hpp>
+#include "Utils.h"
 
 namespace lv {
 
@@ -30,13 +31,31 @@ AppContext::AppContext(AppContextInfo info)
 
 AppContext::~AppContext() {
     vkDeviceWaitIdle(vkDevice);
+    for(auto& pair : extensions) {
+        pair.second->destroyCore(*this);
+    }
+
     vkDestroyDescriptorPool(vkDevice, vkDescriptorPool, nullptr);
     vkDestroyCommandPool(vkDevice, vkCommandPool, nullptr);
     vkDestroyDevice(vkDevice, nullptr);
     vkDestroyInstance(vkInstance, nullptr);
 }
 
-void AppContext::initWindowingSystem() {
+VkShaderModule AppContext::createShaderModule(const char* filePath) const {
+    auto code = readFile(filePath);
+    VkShaderModuleCreateInfo createInfo {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .codeSize = code.size(),
+        .pCode = reinterpret_cast<const uint32_t*>(code.data()),
+    };
+
+    VkShaderModule module;
+    vkCheck(vkCreateShaderModule(vkDevice, &createInfo, nullptr, &module));
+    return module;
+}
+
+
+    void AppContext::initWindowingSystem() {
     // Is idempotent on multiple calls
     if (!glfwInit()) {
         logger::error("Cannot initialize GLFW");

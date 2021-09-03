@@ -15,6 +15,7 @@ struct SwapchainSupport {
 };
 
 struct FrameContext {
+    AppContext& ctx;
     struct {
         VkImage vkImage;
         VkImageView vkView;
@@ -23,13 +24,23 @@ struct FrameContext {
         VkFence inFlightFence;
     } swapchain;
     VkCommandBuffer commandBuffer;
+
+    std::unordered_map<std::type_index, void*> extensionFrame; 
+
+    FrameContext(AppContext& ctx) : ctx(ctx) {}
+
+    template<typename T>
+    T& getExtFrame() {
+        return *reinterpret_cast<T*>(extensionFrame[typeid(T)]);
+    }
 };
+
+
 
 class Window : NoCopy {
 public:
     AppContext& ctx;
     int32_t width, height;
-    std::string name;
     GLFWwindow* glfwWindow;
     VkSurfaceKHR vkSurface;
     bool wasResized = false;
@@ -52,10 +63,15 @@ public:
     bool shouldClose() const;
     void nextFrame(std::function<void(FrameContext&)> callback);
 
+    inline std::vector<FrameContext>& getAllFrames() { return swapchain.frameContexts; }
+    inline uint32_t getNrFrames() const { return swapchain.frameContexts.size(); }
+    inline uint32_t getFrameID() const { return swapchain.imageIdx; }
+
 
 private:
     void createWindow(const char* name, int32_t width, int32_t height);
     void createSwapchain();
+    void buildExtensionFrames();
     void recreateSwapchain();
 
     SwapchainSupport querySwapchainSupport() const;

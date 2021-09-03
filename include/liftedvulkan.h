@@ -1,8 +1,8 @@
 #pragma once
 #include "precomp.h"
-
-#include "Structs.hpp"
+#include "AppExt.h"
 #include "AppContext.h"
 #include "Window.h"
+#include "ComputeShader.h"
 
 
