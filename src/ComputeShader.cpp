@@ -45,12 +45,22 @@ void ComputeShader::createDescriptorSetLayout() {
 }
 
 void ComputeShader::createPipelineLayout() {
+    VkPushConstantRange pushConstantRange {
+        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+        .offset = 0,
+        .size = static_cast<uint32_t>(info.pushConstantSize),
+    };
+
+    if (pushConstantRange.size == 0) {
+        logger::debug("PushConstant range for compute shader unused");
+    }
+
     VkPipelineLayoutCreateInfo createInfo {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount = 1,
         .pSetLayouts = &descriporSetLayout,
-        .pushConstantRangeCount = 0,
-        .pPushConstantRanges = nullptr,
+        .pushConstantRangeCount = pushConstantRange.size > 0 ? 1u : 0u,
+        .pPushConstantRanges = pushConstantRange.size > 0 ? &pushConstantRange : nullptr,
     };
 
     vkCheck(vkCreatePipelineLayout(ctx.vkDevice, &createInfo, nullptr, &pipelineLayout));

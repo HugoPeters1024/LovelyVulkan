@@ -16,6 +16,7 @@ int main(int argc, char** argv) {
 
     lv::ComputeShaderInfo compInfo{};
     compInfo.addImageBinding(0, [](lv::FrameContext& frame) { return &frame.getExtFrame<lv::ImageStoreFrame>().get(COMPUTE_IMAGE).view; });
+    compInfo.addPushConstant<float>();
     auto computeShader = ctx.registerExtension<lv::ComputeShader>("app/shaders_bin/test.comp.spv", compInfo);
 
     lv::RasterizerInfo rastInfo("app/shaders_bin/quad.vert.spv", "app/shaders_bin/quad.frag.spv");
@@ -44,6 +45,8 @@ int main(int argc, char** argv) {
 
             vkCmdBindDescriptorSets(frame.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, computeShader->pipelineLayout, 0, 1, &compFrame.descriptorSet, 0, nullptr);
             vkCmdBindPipeline(frame.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, computeShader->pipeline);
+            float time = static_cast<float>(glfwGetTime());
+            vkCmdPushConstants(frame.commandBuffer, computeShader->pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(float), &time);
             vkCmdDispatch(frame.commandBuffer, frame.swapchain.width/16, frame.swapchain.height/16, 1);
 
             // Prepare the image to be sampled when rendering to the screen
