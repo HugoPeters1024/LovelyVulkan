@@ -89,6 +89,7 @@ void Window::createSwapchain() {
         swapchain.frameContexts[i].swapchain.width = width;
         swapchain.frameContexts[i].swapchain.height = height;
         swapchain.frameContexts[i].swapchain.vkImage = images[i];
+        swapchain.frameContexts[i].swapchain.format = swapchain.surfaceFormat.format;
     }
 
     // Create image views

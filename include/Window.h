@@ -19,6 +19,7 @@ struct FrameContext {
     struct {
         VkImage vkImage;
         VkImageView vkView;
+        VkFormat format;
         VkSemaphore imageAvailableSemaphore;
         VkSemaphore renderFinishedSemaphore;
         VkFence inFlightFence;

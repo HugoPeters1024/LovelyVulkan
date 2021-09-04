@@ -41,8 +41,7 @@ public:
     template<class T, typename... Args>
     T* registerExtension(Args&&... args) {
         static_assert(std::is_base_of<IAppExt, T>::value, "Extensions must be derived from IAppExt");
-        T* ext = new T(std::forward<Args>(args)...);
-        ext->buildCore(*this);
+        T* ext = new T(*this, std::forward<Args>(args)...);
         extensions.insert({typeid(T), ext});
         extensionOrder.emplace_back(typeid(T));
         return ext;

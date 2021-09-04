@@ -2,14 +2,24 @@
 
 namespace lv {
 
+ImageStore::ImageStore(AppContext& ctx, ImageStoreInfo info) 
+   : AppExt<ImageStoreFrame>(ctx), info(info) {
+}
+
+ImageStore::~ImageStore() {
+}
+
+
 ImageStoreFrame* ImageStore::buildFrame(FrameContext& frame) {
     auto ret = new ImageStoreFrame();
 
-    for(auto& pair : m_imageInfos) {
+    for(auto& pair : info.m_imageInfos) {
         auto& imageIdx = pair.first;
         auto& imageInfo = pair.second;
 
-        Image img{};
+        Image img {
+            .format = imageInfo.format,
+        };
         auto imageCreateInfo = vks::initializers::imageCreateInfo(frame.swapchain.width, frame.swapchain.height, imageInfo.format, imageInfo.usage);
         VmaAllocationCreateInfo allocInfo { .usage = VMA_MEMORY_USAGE_GPU_ONLY } ;
         vkCheck(vmaCreateImage(frame.ctx.vmaAllocator, &imageCreateInfo, &allocInfo, &img.image, &img.allocation, nullptr));

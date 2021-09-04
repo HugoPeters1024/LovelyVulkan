@@ -34,7 +34,7 @@ AppContext::~AppContext() {
     auto it = extensionOrder.rbegin();
     while(it != extensionOrder.rend()) {
         auto ext = extensions[*it];
-        ext->destroyCore(*this);
+        delete ext;
         it++;
     }
 

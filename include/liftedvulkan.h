@@ -4,6 +4,7 @@
 #include "AppContext.h"
 #include "Window.h"
 #include "ComputeShader.h"
+#include "Rasterizer.h"
 #include "ImageStore.h"
 
 

@@ -13,6 +13,8 @@ macro(shader)
 endmacro()
 
 shader("test.comp")
+shader("quad.vert")
+shader("quad.frag")
 
 set(CMAKE_CXX_STANDARD 20)
 add_executable(app main.cpp ${shader_src})

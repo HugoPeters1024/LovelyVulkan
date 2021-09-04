@@ -26,28 +26,24 @@ struct ComputeShaderInfo {
 };
 
 class ComputeShader : public AppExt<ComputeFrame> {
-private:
-    ComputeShaderInfo info;
-    void createDescriptorSetLayout(AppContext& ctx);
-    void createPipelineLayout(AppContext &ctx);
-    void createPipeline(AppContext &ctx, const char *filePath);
-
-
 public:
+    ComputeShader(AppContext& ctx, const char* filePath, ComputeShaderInfo info);
+    ~ComputeShader();
+
     VkShaderModule shaderModule;
     VkPipelineLayout pipelineLayout;
     VkPipeline pipeline;
     VkDescriptorSetLayout descriporSetLayout;
-    const char* filePath;
-
-    ComputeShader(const char* filePath, ComputeShaderInfo info) 
-        : filePath(filePath), info(info) { }
 
 
-    void buildCore(AppContext& ctx) override;
-    void destroyCore(AppContext& ctx) override;
     ComputeFrame* buildFrame(FrameContext& frame) override;
     void destroyFrame(AppContext& ctx, ComputeFrame*) override {}
+private:
+    const char* filePath;
+    ComputeShaderInfo info;
+    void createDescriptorSetLayout();
+    void createPipelineLayout();
+    void createPipeline();
 };
 
 }

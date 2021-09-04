@@ -10,32 +10,35 @@ struct ImageInfo {
 };
 
 struct Image {
+    VkFormat format;
     VkImage image;
     VmaAllocation allocation;
     VkImageView view;
 };
 
 typedef uint32_t ImageID;
-struct ImageStoreFrame {
-    std::unordered_map<ImageID, Image> images;
-
-    inline Image& get(ImageID id) { return images[id]; }
+struct ImageStoreInfo {
+    std::unordered_map<ImageID, ImageInfo> m_imageInfos;
+    inline void defineImage(ImageID slot, VkFormat format, VkImageUsageFlags usage) {
+        ImageInfo info { format, usage };
+        m_imageInfos.insert({slot, info});
+    }
 };
 
-class ImageStore : public AppExt<ImageStoreFrame> {
-private:
-    std::unordered_map<ImageID, ImageInfo> m_imageInfos;
-public:
-    inline void addImage(ImageID id, VkFormat format, VkImageUsageFlags usage) {
-        ImageInfo info { format, usage };
-        m_imageInfos.insert({id, info});
-    }
+struct ImageStoreFrame {
+    std::unordered_map<ImageID, Image> images;
+    inline Image& get(ImageID slot) { return images[slot]; }
+};
 
-    void buildCore(AppContext& ctx) override {}
-    void destroyCore(AppContext& ctx) override {}
+
+class ImageStore : public AppExt<ImageStoreFrame> {
+public:
+    ImageStore(AppContext& ctx, ImageStoreInfo info);
+    ~ImageStore();
 
     ImageStoreFrame* buildFrame(FrameContext& frame) override;
     void destroyFrame(AppContext& ctx, ImageStoreFrame* frame) override;
+private:
+    ImageStoreInfo info;
 };
-
 }
