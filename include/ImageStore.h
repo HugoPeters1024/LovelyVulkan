@@ -27,7 +27,10 @@ struct ImageStoreInfo {
 
 struct ImageStoreFrame {
     std::unordered_map<ImageID, Image> images;
-    inline Image& get(ImageID slot) { return images[slot]; }
+    inline Image& get(ImageID slot) {
+        assert(images.find(slot) != images.end() && "Image not registered before use");
+        return images[slot];
+    }
 };
 
 

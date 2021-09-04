@@ -13,7 +13,7 @@ ComputeShader::ComputeShader(AppContext& ctx, const char* filePath, ComputeShade
 ComputeShader::~ComputeShader() {
     vkDestroyPipeline(ctx.vkDevice, pipeline, nullptr);
     vkDestroyPipelineLayout(ctx.vkDevice, pipelineLayout, nullptr);
-    vkDestroyDescriptorSetLayout(ctx.vkDevice, descriporSetLayout, nullptr);
+    vkDestroyDescriptorSetLayout(ctx.vkDevice, descriptorSetLayout, nullptr);
 }
 
 void ComputeShader::createDescriptorSetLayout() {
@@ -22,7 +22,7 @@ void ComputeShader::createDescriptorSetLayout() {
     for(auto& pair : info.bindingSet) {
         uint32_t binding = pair.first;
         VkDescriptorType descriptorType;
-        switch(pair.second.type) {
+        switch(pair.second) {
             case ResourceType::Image: descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE; break;
             case ResourceType::Buffer: descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; break;
         }
@@ -41,7 +41,7 @@ void ComputeShader::createDescriptorSetLayout() {
         .pBindings = bindings.data(),
     };
 
-    vkCheck(vkCreateDescriptorSetLayout(ctx.vkDevice, &layoutInfo, nullptr, &descriporSetLayout));
+    vkCheck(vkCreateDescriptorSetLayout(ctx.vkDevice, &layoutInfo, nullptr, &descriptorSetLayout));
 }
 
 void ComputeShader::createPipelineLayout() {
@@ -58,7 +58,7 @@ void ComputeShader::createPipelineLayout() {
     VkPipelineLayoutCreateInfo createInfo {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount = 1,
-        .pSetLayouts = &descriporSetLayout,
+        .pSetLayouts = &descriptorSetLayout,
         .pushConstantRangeCount = pushConstantRange.size > 0 ? 1u : 0u,
         .pPushConstantRanges = pushConstantRange.size > 0 ? &pushConstantRange : nullptr,
     };
@@ -78,25 +78,28 @@ ComputeFrame* ComputeShader::buildFrame(FrameContext& frame) {
     logger::debug("Comp frame being build");
 
     auto ret = new ComputeFrame();
-    auto allocInfo = vks::initializers::descriptorSetAllocateInfo(frame.ctx.vkDescriptorPool, &descriporSetLayout, 1);
-    vkCheck(vkAllocateDescriptorSets(frame.ctx.vkDevice, &allocInfo, &ret->descriptorSet));
+    ret->descriptorSets.resize(info.descriptorSelectorsTable.size());
+    std::vector<VkDescriptorSetLayout> layouts(info.descriptorSelectorsTable.size(), descriptorSetLayout);
+    auto allocInfo = vks::initializers::descriptorSetAllocateInfo(frame.ctx.vkDescriptorPool, layouts.data(), info.descriptorSelectorsTable.size());
+    vkCheck(vkAllocateDescriptorSets(frame.ctx.vkDevice, &allocInfo, ret->descriptorSets.data()));
 
-    std::vector<VkDescriptorImageInfo> imageInfos;
-    std::vector<VkWriteDescriptorSet> writes;
-    for(auto& pair : info.bindingSet) {
-        if (pair.second.type == ResourceType::Image) {
-            // TODO: make sure that the imageInfos are sorted by binding
-            VkImageView imageView = *reinterpret_cast<VkImageView*>(pair.second.selector(frame));
-            auto imageInfo = vks::initializers::descriptorImageInfo(nullptr, imageView, VK_IMAGE_LAYOUT_GENERAL);
-            imageInfos.push_back(imageInfo);
-            auto writeInfo = vks::initializers::writeDescriptorSet(ret->descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 0, &imageInfos.back());
-            writes.push_back(writeInfo);
-        } else {
-            throw std::runtime_error("Not implemented");
+    for(const auto& descriptors : info.descriptorSelectorsTable) {
+        auto& descriptorIdx = descriptors.first;
+        auto& descriptorSelectors = descriptors.second;
+        for(const auto& descriptorSelector : descriptorSelectors) {
+            if (descriptorSelector.type == ResourceType::Image) {
+                // TODO: make sure that the imageInfos are sorted by binding
+                VkImageView imageView = *reinterpret_cast<VkImageView*>(descriptorSelector.selector(frame));
+                auto imageInfo = vks::initializers::descriptorImageInfo(nullptr, imageView, VK_IMAGE_LAYOUT_GENERAL);
+                auto writeInfo = vks::initializers::writeDescriptorSet(ret->descriptorSets[descriptorIdx], VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, descriptorSelector.binding, &imageInfo);
+                vkUpdateDescriptorSets(frame.ctx.vkDevice, 1, &writeInfo, 0, nullptr);
+            } else {
+                throw std::runtime_error("Not implemented");
+            }
         }
+        //vkUpdateDescriptorSets(frame.ctx.vkDevice, writes.size(), writes.data(), 0, nullptr);
     }
 
-    vkUpdateDescriptorSets(frame.ctx.vkDevice, writes.size(), writes.data(), 0, nullptr);
     return ret;
 }
 }
