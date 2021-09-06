@@ -66,6 +66,8 @@ public:
     ~AppContext();
 
     VkShaderModule createShaderModule(const char* filePath) const;
+    VkCommandBuffer singleTimeCommandBuffer() const;
+    void endSingleTimeCommands(VkCommandBuffer cmdBuffer) const;
 
 private:
     void initWindowingSystem();

@@ -58,8 +58,25 @@ VkShaderModule AppContext::createShaderModule(const char* filePath) const {
     return module;
 }
 
+VkCommandBuffer AppContext::singleTimeCommandBuffer() const {
+    VkCommandBuffer ret;
+    auto allocInfo = vks::initializers::commandBufferAllocateInfo(vkCommandPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1);
+    vkCheck(vkAllocateCommandBuffers(vkDevice, &allocInfo, &ret));
+    auto beginInfo = vks::initializers::commandBufferBeginInfo();
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    vkCheck(vkBeginCommandBuffer(ret, &beginInfo));
+    return ret;
+}
 
-    void AppContext::initWindowingSystem() {
+void AppContext::endSingleTimeCommands(VkCommandBuffer cmdBuffer) const {
+    vkCheck(vkEndCommandBuffer(cmdBuffer));
+    auto submitInfo = vks::initializers::submitInfo(&cmdBuffer);
+    vkQueueSubmit(queues.graphics, 1, &submitInfo, VK_NULL_HANDLE);
+    vkQueueWaitIdle(queues.graphics);
+}
+
+
+void AppContext::initWindowingSystem() {
     // Is idempotent on multiple calls
     if (!glfwInit()) {
         logger::error("Cannot initialize GLFW");

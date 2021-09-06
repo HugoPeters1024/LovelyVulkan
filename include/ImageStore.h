@@ -4,9 +4,12 @@
 
 namespace lv {
 
+enum class ImageID : uint32_t;
+
 struct ImageInfo {
     VkFormat format;
     VkImageUsageFlags usage;
+    VkImageLayout initialLayout;
 };
 
 struct Image {
@@ -16,17 +19,18 @@ struct Image {
     VkImageView view;
 };
 
-typedef uint32_t ImageID;
 struct ImageStoreInfo {
     std::unordered_map<ImageID, ImageInfo> m_imageInfos;
-    inline void defineImage(ImageID slot, VkFormat format, VkImageUsageFlags usage) {
-        ImageInfo info { format, usage };
+
+    inline void defineImage(ImageID slot, VkFormat format, VkImageUsageFlags usage, VkImageLayout initialLayout) {
+        ImageInfo info { format, usage, initialLayout };
         m_imageInfos.insert({slot, info});
     }
 };
 
 struct ImageStoreFrame {
     std::unordered_map<ImageID, Image> images;
+
     inline Image& get(ImageID slot) {
         assert(images.find(slot) != images.end() && "Image not registered before use");
         return images[slot];
@@ -42,6 +46,7 @@ public:
     ImageStoreFrame* buildFrame(FrameContext& frame) override;
     void destroyFrame(AppContext& ctx, ImageStoreFrame* frame) override;
 private:
+
     ImageStoreInfo info;
 };
 }
