@@ -44,7 +44,7 @@ public:
     ~ImageStore();
 
     ImageStoreFrame* buildFrame(FrameContext& frame) override;
-    void destroyFrame(AppContext& ctx, ImageStoreFrame* frame) override;
+    void destroyFrame(ImageStoreFrame* frame) override;
 private:
 
     ImageStoreInfo info;

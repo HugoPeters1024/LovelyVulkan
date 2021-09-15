@@ -57,7 +57,7 @@ public:
 
 
     ComputeFrame* buildFrame(FrameContext& frame) override;
-    void destroyFrame(AppContext& ctx, ComputeFrame*) override {}
+    void destroyFrame(ComputeFrame* frame) override {}
 private:
     const char* filePath;
     ComputeShaderInfo info;

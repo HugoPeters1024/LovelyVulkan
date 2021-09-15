@@ -56,7 +56,7 @@ RasterizerFrame* Rasterizer::buildFrame(FrameContext& frame) {
 
 }
 
-void Rasterizer::destroyFrame(AppContext& ctx, RasterizerFrame* frame) {
+void Rasterizer::destroyFrame(RasterizerFrame* frame) {
     vkDestroyFramebuffer(ctx.vkDevice, frame->framebuffer, nullptr);
     vkDestroySampler(ctx.vkDevice, frame->sampler, nullptr);
 }

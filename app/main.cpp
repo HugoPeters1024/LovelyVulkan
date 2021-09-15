@@ -2,26 +2,34 @@
 
 const lv::ImageID COMPUTE_IMAGE = lv::ImageID(0);
 
-
 int main(int argc, char** argv) {
     logger::set_level(spdlog::level::debug);
-    lv::AppContextInfo info;
-    lv::AppContext ctx(info);
 
     lv::ImageStoreInfo imageStoreInfo;
     imageStoreInfo.defineImage(COMPUTE_IMAGE, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_LAYOUT_GENERAL);
-    auto imageStore = ctx.registerExtension<lv::ImageStore>(imageStoreInfo);
+
+    lv::AppContextInfo info;
+    info.registerExtension<lv::ImageStore>(imageStoreInfo);
 
     lv::ComputeShaderInfo compInfo{};
     compInfo.addImageBinding(0, 0, [](lv::FrameContext& frame) { return &frame.fPrev->getExtFrame<lv::ImageStoreFrame>().get(COMPUTE_IMAGE).view; });
     compInfo.addImageBinding(0, 1, [](lv::FrameContext& frame) { return &frame.getExtFrame<lv::ImageStoreFrame>().get(COMPUTE_IMAGE).view; });
     compInfo.setPushConstantType<float>();
-    auto computeShader = ctx.registerExtension<lv::ComputeShader>("app/shaders_bin/test.comp.spv", compInfo);
+    info.registerExtension<lv::ComputeShader>("app/shaders_bin/test.comp.spv", compInfo);
 
     lv::RasterizerInfo rastInfo("app/shaders_bin/quad.vert.spv", "app/shaders_bin/quad.frag.spv");
     rastInfo.defineAttachment(0, [](lv::FrameContext& frame) { return frame.swapchain.vkView; });
     rastInfo.defineTexture(0, [](lv::FrameContext& frame) { return frame.getExtFrame<lv::ImageStoreFrame>().get(COMPUTE_IMAGE).view; });
-    auto rasterizer = ctx.registerExtension<lv::Rasterizer>(rastInfo);
+    info.registerExtension<lv::Rasterizer>(rastInfo);
+
+    lv::RayTracerInfo rayInfo{};
+    info.registerExtension<lv::RayTracer>(rayInfo);
+
+    lv::AppContext ctx(info);
+
+    auto computeShader = ctx.getExtension<lv::ComputeShader>();
+    auto imageStore = ctx.getExtension<lv::ImageStore>();
+    auto rasterizer = ctx.getExtension<lv::Rasterizer>();
 
     lv::WindowInfo windowInfo;
     windowInfo.width = 640;

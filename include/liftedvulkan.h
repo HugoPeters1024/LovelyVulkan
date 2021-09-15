@@ -5,6 +5,7 @@
 #include "Window.h"
 #include "ComputeShader.h"
 #include "Rasterizer.h"
+#include "RayTracer.h"
 #include "ImageStore.h"
 
 

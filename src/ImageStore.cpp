@@ -46,7 +46,7 @@ ImageStoreFrame* ImageStore::buildFrame(FrameContext& frame) {
     return ret;
 }
 
-void ImageStore::destroyFrame(AppContext& ctx, ImageStoreFrame* frame) {
+void ImageStore::destroyFrame(ImageStoreFrame* frame) {
     for(auto& pair : frame->images) {
         auto& image = pair.second;
         vkDestroyImageView(ctx.vkDevice, image.view, nullptr);

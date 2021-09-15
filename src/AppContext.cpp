@@ -27,6 +27,7 @@ AppContext::AppContext(AppContextInfo info)
     createVmaAllocator();
     createCommandPool();
     createDescriptorPool();
+    createExtensions();
 }
 
 AppContext::~AppContext() {
@@ -281,6 +282,15 @@ void AppContext::createDescriptorPool() {
     };
 
     vkCheck(vkCreateDescriptorPool(vkDevice, &poolInfo, nullptr, &vkDescriptorPool));
+}
+
+void AppContext::createExtensions() {
+    for(const auto& pair : info.extensionGenerators) {
+        auto ext = pair.second(*this);
+        logger::debug("Building extension {}", pair.first.name());
+        extensions.insert({pair.first, ext});
+        extensionOrder.push_back(pair.first);
+    }
 }
 
 

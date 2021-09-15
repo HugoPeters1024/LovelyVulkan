@@ -46,7 +46,7 @@ public:
     ~Rasterizer();
 
     RasterizerFrame* buildFrame(FrameContext& frame) override;
-    void destroyFrame(AppContext& ctx, RasterizerFrame* frame) override;
+    void destroyFrame(RasterizerFrame* frame) override;
 
     void startPass(FrameContext& frame) const;
     void endPass(FrameContext& frame) const;

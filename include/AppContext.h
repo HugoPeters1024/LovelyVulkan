@@ -4,11 +4,27 @@
 
 namespace lv {
 
+class AppContext;
 struct AppContextInfo {
     uint32_t apiVersion = VK_API_VERSION_1_2;
     std::set<const char*> validationLayers;
     std::set<const char*> instanceExtensions;
     std::set<const char*> deviceExtensions;
+
+    std::vector<std::pair<std::type_index, std::function<IAppExt*(AppContext&)>>> extensionGenerators;
+
+    template<class T, typename... Args>
+    void registerExtension(Args&&... args) {
+        static_assert(std::is_base_of<IAppExt, T>::value, "Extensions must be derived from IAppExt");
+
+        for(const auto& ext : app_extensions<T>()()) {
+            logger::info("{} registered extension {}", typeid(T).name(), ext);
+            deviceExtensions.insert(ext);
+        }
+
+        auto f = [args...](AppContext& ctx) { return new T(ctx, args...); };
+        extensionGenerators.push_back({typeid(T), f});
+    }
 };
 
 class AppContext : NoCopy {
@@ -38,18 +54,10 @@ public:
         std::vector<VkPresentModeKHR> presentModes;
     } swapchainSupport;
 
-    template<class T, typename... Args>
-    T* registerExtension(Args&&... args) {
-        static_assert(std::is_base_of<IAppExt, T>::value, "Extensions must be derived from IAppExt");
-        T* ext = new T(*this, std::forward<Args>(args)...);
-        extensions.insert({typeid(T), ext});
-        extensionOrder.emplace_back(typeid(T));
-        return ext;
-    }
-
     template<class T>
     T* getExtension() {
         static_assert(std::is_base_of<IAppExt, T>::value, "Extensions must be derived from IAppExt");
+        assert(extensions.find(typeid(T)) != extensions.end() && "Extension used without registering");
         return reinterpret_cast<T*>(extensions[typeid(T)]);
     }
 
@@ -81,6 +89,7 @@ private:
     void createVmaAllocator();
     void createCommandPool();
     void createDescriptorPool();
+    void createExtensions();
 };
 
 };
