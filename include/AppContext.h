@@ -85,7 +85,7 @@ private:
     void pickPhysicalDevice();
     void findQueueFamilies();
     void createLogicalDevice();
-    void cleanupWindowHelper();
+    void cleanupWindowHelper() const;
     void createVmaAllocator();
     void createCommandPool();
     void createDescriptorPool();

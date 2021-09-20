@@ -73,7 +73,9 @@ void AppContext::endSingleTimeCommands(VkCommandBuffer cmdBuffer) const {
     vkCheck(vkEndCommandBuffer(cmdBuffer));
     auto submitInfo = vks::initializers::submitInfo(&cmdBuffer);
     vkQueueSubmit(queues.graphics, 1, &submitInfo, VK_NULL_HANDLE);
-    vkQueueWaitIdle(queues.graphics);
+
+    vkCheck(vkQueueWaitIdle(queues.graphics));
+    vkFreeCommandBuffers(vkDevice, vkCommandPool, 1, &cmdBuffer);
 }
 
 
@@ -205,9 +207,28 @@ void AppContext::createLogicalDevice() {
         });
     }
 
+
     VkPhysicalDeviceFeatures deviceFeatures{
         .samplerAnisotropy = VK_TRUE,
     };
+
+    VkPhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingPipelineFeatures {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR,
+        .rayTracingPipeline = VK_TRUE,
+    };
+
+    VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR,
+        .pNext = &rayTracingPipelineFeatures,
+        .accelerationStructure = VK_TRUE,
+    };
+
+    VkPhysicalDeviceBufferDeviceAddressFeatures enabledBufferDevicesAddressFeatures {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES,
+        .pNext = &accelerationStructureFeatures,
+        .bufferDeviceAddress = VK_TRUE,
+    };
+
 
     std::vector<const char*> devicesExtensions(info.deviceExtensions.begin(), info.deviceExtensions.end());
     if (!deviceExtensionsSupported(vkPhysicalDevice, info.deviceExtensions)) {
@@ -217,6 +238,7 @@ void AppContext::createLogicalDevice() {
 
     VkDeviceCreateInfo createInfo {
         .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+        .pNext = &enabledBufferDevicesAddressFeatures,
         .queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size()),
         .pQueueCreateInfos = queueCreateInfos.data(),
         .enabledExtensionCount = static_cast<uint32_t>(devicesExtensions.size()),
@@ -225,21 +247,21 @@ void AppContext::createLogicalDevice() {
     };
 
 
-    VkResult res = (vkCreateDevice(vkPhysicalDevice, &createInfo, nullptr, &vkDevice));
+    vkCheck(vkCreateDevice(vkPhysicalDevice, &createInfo, nullptr, &vkDevice));
 
     vkGetDeviceQueue(vkDevice, queueFamilies.compute.value(), 0, &queues.compute);
     vkGetDeviceQueue(vkDevice, queueFamilies.graphics.value(), 0, &queues.graphics);
     vkGetDeviceQueue(vkDevice, queueFamilies.present.value(), 0, &queues.present);
 }    
 
-void AppContext::cleanupWindowHelper() {
+void AppContext::cleanupWindowHelper() const {
     vkDestroySurfaceKHR(vkInstance, windowHelper.surface, nullptr);
     glfwDestroyWindow(windowHelper.window);
 }
 
 void AppContext::createVmaAllocator() {
     VmaAllocatorCreateInfo allocatorInfo {
-        .flags = VMA_ALLOCATOR_CREATE_KHR_DEDICATED_ALLOCATION_BIT,
+        .flags = VMA_ALLOCATOR_CREATE_KHR_DEDICATED_ALLOCATION_BIT | VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
         .physicalDevice = vkPhysicalDevice,
         .device = vkDevice,
         .instance = vkInstance,

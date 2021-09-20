@@ -4,12 +4,15 @@ const lv::ImageID COMPUTE_IMAGE = lv::ImageID(0);
 
 int main(int argc, char** argv) {
     logger::set_level(spdlog::level::debug);
+    lv::AppContextInfo info;
+
+    lv::RayTracerInfo rayInfo{};
+    info.registerExtension<lv::RayTracer>(rayInfo);
 
     lv::ImageStoreInfo imageStoreInfo;
     imageStoreInfo.defineImage(COMPUTE_IMAGE, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_LAYOUT_GENERAL);
-
-    lv::AppContextInfo info;
     info.registerExtension<lv::ImageStore>(imageStoreInfo);
+
 
     lv::ComputeShaderInfo compInfo{};
     compInfo.addImageBinding(0, 0, [](lv::FrameContext& frame) { return &frame.fPrev->getExtFrame<lv::ImageStoreFrame>().get(COMPUTE_IMAGE).view; });
@@ -22,8 +25,6 @@ int main(int argc, char** argv) {
     rastInfo.defineTexture(0, [](lv::FrameContext& frame) { return frame.getExtFrame<lv::ImageStoreFrame>().get(COMPUTE_IMAGE).view; });
     info.registerExtension<lv::Rasterizer>(rastInfo);
 
-    lv::RayTracerInfo rayInfo{};
-    info.registerExtension<lv::RayTracer>(rayInfo);
 
     lv::AppContext ctx(info);
 

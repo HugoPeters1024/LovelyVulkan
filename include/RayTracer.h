@@ -7,6 +7,19 @@ namespace lv {
 
 class RayTracer;
 
+struct RayTracingScratchBuffer {
+    uint64_t deviceAddress = 0;
+    VkBuffer handle = VK_NULL_HANDLE;
+    VmaAllocation memory = VK_NULL_HANDLE;
+};
+
+struct AccelerationStructure {
+    VkAccelerationStructureKHR handle;
+    uint64_t deviceAddress = 0;
+    VmaAllocation memory;
+    VkBuffer buffer;
+};
+
 template<>
 struct app_extensions<RayTracer> {
     std::vector<const char*> operator()() const { 
@@ -36,12 +49,39 @@ public:
     RayTracerFrame* buildFrame(FrameContext& frame) override;
     void destroyFrame(RayTracerFrame* frame) override;
 
-private:
-    RayTracerInfo info;
+	PFN_vkGetBufferDeviceAddressKHR vkGetBufferDeviceAddressKHR;
+	PFN_vkCreateAccelerationStructureKHR vkCreateAccelerationStructureKHR;
+	PFN_vkDestroyAccelerationStructureKHR vkDestroyAccelerationStructureKHR;
+	PFN_vkGetAccelerationStructureBuildSizesKHR vkGetAccelerationStructureBuildSizesKHR;
+	PFN_vkGetAccelerationStructureDeviceAddressKHR vkGetAccelerationStructureDeviceAddressKHR;
+	PFN_vkCmdBuildAccelerationStructuresKHR vkCmdBuildAccelerationStructuresKHR;
+	PFN_vkBuildAccelerationStructuresKHR vkBuildAccelerationStructuresKHR;
+	PFN_vkCmdTraceRaysKHR vkCmdTraceRaysKHR;
+	PFN_vkGetRayTracingShaderGroupHandlesKHR vkGetRayTracingShaderGroupHandlesKHR;
+	PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelinesKHR;
 
-    void createBottomLevelACStructure();
+private:
+    void loadFunctions();
+    RayTracingScratchBuffer createScratchBuffer(VkDeviceSize size);
+    void destroyScratchBuffer(RayTracingScratchBuffer& scratchBuffer);
+    AccelerationStructure createAccelerationStructureBuffer(VkAccelerationStructureBuildSizesInfoKHR buildSizeInfo);
+
+    void createBottomLevelAccelerationStructure();
+
+    uint64_t getBufferDeviceAddress(VkBuffer buffer);
+
+    RayTracerInfo info;
+    VkBuffer vertexBuffer;
+    VmaAllocation vertexBufferMemory;
+    VkBuffer indexBuffer;
+    VmaAllocation indexBufferMemory;
+    VkBuffer transformBuffer;
+    VmaAllocation transformBufferMemory;
+
+    AccelerationStructure bottomAC;
+    AccelerationStructure topAC;
 };
 
 
-}
+};
 
