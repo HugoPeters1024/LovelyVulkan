@@ -5,6 +5,7 @@ namespace lv {
 RayTracer::RayTracer(AppContext& ctx, RayTracerInfo info) : AppExt<RayTracerFrame>(ctx), info(info) {
     loadFunctions();
     createBottomLevelAccelerationStructure();
+    createTopLevelAccelerationStructure();
 }
 
 RayTracer::~RayTracer() {
@@ -75,9 +76,9 @@ void RayTracer::createBottomLevelAccelerationStructure() {
     struct Vertex { float pos[3]; };
 
     std::array<Vertex, 3> vertices {
-        Vertex { .pos = { 1.0f, 1.0f, 0.0f }},
-        Vertex { .pos = { 1.0f, 1.0f, 0.0f }},
-        Vertex { .pos = { 1.0f, 1.0f, 0.0f }},
+        Vertex { .pos = {  1.0f,  1.0f, 0.0f }},
+        Vertex { .pos = { -1.0f,  1.0f, 0.0f }},
+        Vertex { .pos = {  0.0f, -1.0f, 0.0f }},
     };
 
     std::array<uint32_t, 3> indices = { 0, 1, 2 };
@@ -190,6 +191,99 @@ void RayTracer::createBottomLevelAccelerationStructure() {
     ctx.endSingleTimeCommands(cmdBuffer);
 
     destroyScratchBuffer(scratchBuffer);
+}
+
+void RayTracer::createTopLevelAccelerationStructure() {
+    VkTransformMatrixKHR transformMatrix {
+        1.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f,
+    };
+
+    VkAccelerationStructureInstanceKHR instance{};
+    instance.transform = transformMatrix;
+    instance.instanceCustomIndex = 0;
+    instance.mask = 0xFF;
+    instance.instanceShaderBindingTableRecordOffset = 0;
+    instance.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
+    instance.accelerationStructureReference = bottomAC.deviceAddress;
+
+    VkBuffer instanceBuffer;
+    VmaAllocation instanceBufferMemory;
+    {
+        auto bufferInfo = vks::initializers::bufferCreateInfo(VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR, sizeof(VkAccelerationStructureInstanceKHR));
+        VmaAllocationCreateInfo allocInfo { .usage = VMA_MEMORY_USAGE_CPU_TO_GPU };
+        vkCheck(vmaCreateBuffer(ctx.vmaAllocator, &bufferInfo, &allocInfo, &instanceBuffer, &instanceBufferMemory, nullptr));
+        void* data;
+        vkCheck(vmaMapMemory(ctx.vmaAllocator, instanceBufferMemory, &data));
+        memcpy(data, &instance, sizeof(VkAccelerationStructureInstanceKHR));
+        vmaUnmapMemory(ctx.vmaAllocator, instanceBufferMemory);
+    }
+
+    VkDeviceOrHostAddressConstKHR instanceDataDeviceAddress{};
+    instanceDataDeviceAddress.deviceAddress = getBufferDeviceAddress(instanceBuffer);
+
+    VkAccelerationStructureGeometryKHR accelerationStructureGeometry {};
+    accelerationStructureGeometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+    accelerationStructureGeometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
+    accelerationStructureGeometry.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
+    accelerationStructureGeometry.geometry.instances.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
+    accelerationStructureGeometry.geometry.instances.arrayOfPointers = VK_FALSE;
+    accelerationStructureGeometry.geometry.instances.data = instanceDataDeviceAddress;
+
+    // Get the size info
+    VkAccelerationStructureBuildGeometryInfoKHR buildInfo{};
+    buildInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
+    buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
+    buildInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
+    buildInfo.geometryCount = 1;
+    buildInfo.pGeometries = &accelerationStructureGeometry;
+
+    uint32_t primitiveCount = 1;
+
+    VkAccelerationStructureBuildSizesInfoKHR buildSizesInfo{};
+    buildSizesInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
+    vkGetAccelerationStructureBuildSizesKHR(ctx.vkDevice, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &primitiveCount, &buildSizesInfo);
+
+    topAC = createAccelerationStructureBuffer(buildSizesInfo);
+
+    VkAccelerationStructureCreateInfoKHR ASInfo{};
+    ASInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
+    ASInfo.buffer = topAC.buffer;
+    ASInfo.size = buildSizesInfo.accelerationStructureSize;
+    ASInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
+    vkCheck(vkCreateAccelerationStructureKHR(ctx.vkDevice, &ASInfo, nullptr, &topAC.handle));
+
+    auto scratchBuffer = createScratchBuffer(buildSizesInfo.buildScratchSize);
+
+    VkAccelerationStructureBuildGeometryInfoKHR accelerationBuildGeometryInfo{};
+    accelerationBuildGeometryInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
+    accelerationBuildGeometryInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
+    accelerationBuildGeometryInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
+    accelerationBuildGeometryInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+    accelerationBuildGeometryInfo.dstAccelerationStructure = topAC.handle;
+    accelerationBuildGeometryInfo.geometryCount = 1;
+    accelerationBuildGeometryInfo.pGeometries = &accelerationStructureGeometry;
+    accelerationBuildGeometryInfo.scratchData.deviceAddress = scratchBuffer.deviceAddress;
+ 
+    VkAccelerationStructureBuildRangeInfoKHR accelerationStructureBuildRangeInfo{};
+    accelerationStructureBuildRangeInfo.primitiveCount = 1;
+    accelerationStructureBuildRangeInfo.primitiveOffset = 0;
+    accelerationStructureBuildRangeInfo.firstVertex = 0;
+    accelerationStructureBuildRangeInfo.transformOffset = 0;
+    VkAccelerationStructureBuildRangeInfoKHR* buildRangeInfoPtr = &accelerationStructureBuildRangeInfo;
+
+    auto cmdBuffer = ctx.singleTimeCommandBuffer();
+    vkCmdBuildAccelerationStructuresKHR(cmdBuffer, 1, &accelerationBuildGeometryInfo, &buildRangeInfoPtr);
+    ctx.endSingleTimeCommands(cmdBuffer);
+
+    VkAccelerationStructureDeviceAddressInfoKHR addressInfo{};
+    addressInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR;
+    addressInfo.accelerationStructure = topAC.handle;
+    topAC.deviceAddress = vkGetAccelerationStructureDeviceAddressKHR(ctx.vkDevice, &addressInfo);
+
+    destroyScratchBuffer(scratchBuffer);
+    vmaDestroyBuffer(ctx.vmaAllocator, instanceBuffer, instanceBufferMemory);
 }
 
 

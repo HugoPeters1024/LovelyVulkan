@@ -39,7 +39,6 @@ struct RayTracerFrame {
 struct RayTracerInfo {
 };
 
-
 class RayTracer : public AppExt<RayTracerFrame> {
 public:
     RayTracer(AppContext& ctx, RayTracerInfo info);
@@ -67,6 +66,7 @@ private:
     AccelerationStructure createAccelerationStructureBuffer(VkAccelerationStructureBuildSizesInfoKHR buildSizeInfo);
 
     void createBottomLevelAccelerationStructure();
+    void createTopLevelAccelerationStructure();
 
     uint64_t getBufferDeviceAddress(VkBuffer buffer);
 
