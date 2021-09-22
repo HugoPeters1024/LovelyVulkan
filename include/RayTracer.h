@@ -29,11 +29,14 @@ struct app_extensions<RayTracer> {
             VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
             VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
             VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
+            VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME,
+            VK_KHR_SPIRV_1_4_EXTENSION_NAME,
         }; 
     }
 };
 
 struct RayTracerFrame {
+    VkDescriptorSet descriptorSet;
 };
 
 struct RayTracerInfo {
@@ -47,6 +50,8 @@ public:
 
     RayTracerFrame* buildFrame(FrameContext& frame) override;
     void destroyFrame(RayTracerFrame* frame) override;
+
+    void render(FrameContext& frame) const;
 
 	PFN_vkGetBufferDeviceAddressKHR vkGetBufferDeviceAddressKHR;
 	PFN_vkCreateAccelerationStructureKHR vkCreateAccelerationStructureKHR;
@@ -65,10 +70,13 @@ private:
     void destroyScratchBuffer(RayTracingScratchBuffer& scratchBuffer);
     AccelerationStructure createAccelerationStructureBuffer(VkAccelerationStructureBuildSizesInfoKHR buildSizeInfo);
 
+    void getFeatures();
+    void createRayTracingPipeline();
     void createBottomLevelAccelerationStructure();
     void createTopLevelAccelerationStructure();
+    void createShaderBindingTable();
 
-    uint64_t getBufferDeviceAddress(VkBuffer buffer);
+    uint64_t getBufferDeviceAddress(VkBuffer buffer) const;
 
     RayTracerInfo info;
     VkBuffer vertexBuffer;
@@ -78,8 +86,25 @@ private:
     VkBuffer transformBuffer;
     VmaAllocation transformBufferMemory;
 
+    std::vector<VkRayTracingShaderGroupCreateInfoKHR> shaderGroups{};
+
+    VkDescriptorSetLayout descriptorSetLayout;
+    VkPipelineLayout pipelineLayout;
+    VkPipeline pipeline;
+
+    VkBuffer raygenShaderBindingTable;
+    VmaAllocation raygenShaderBindingTableMemory;
+    VkBuffer missShaderBindingTable;
+    VmaAllocation missShaderBindingTableMemory;
+    VkBuffer hitShaderBindingTable;
+    VmaAllocation hitShaderBindingTableMemory;
+
+    VkPhysicalDeviceRayTracingPipelinePropertiesKHR rayTracingPipelineProperties{};
+    VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures{};
+
     AccelerationStructure bottomAC;
     AccelerationStructure topAC;
+
 };
 
 

@@ -369,6 +369,7 @@ namespace vks
 			else
 			{
 				std::cerr << "Error: Could not open shader file \"" << fileName << "\"" << "\n";
+                exit(1);
 				return VK_NULL_HANDLE;
 			}
 		}

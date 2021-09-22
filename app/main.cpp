@@ -6,12 +6,14 @@ int main(int argc, char** argv) {
     logger::set_level(spdlog::level::debug);
     lv::AppContextInfo info;
 
+    lv::ImageStoreInfo imageStoreInfo;
+    imageStoreInfo.defineImage(COMPUTE_IMAGE, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_LAYOUT_GENERAL);
+    imageStoreInfo.defineImage(lv::ImageID(1), VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_LAYOUT_GENERAL);
+    info.registerExtension<lv::ImageStore>(imageStoreInfo);
+
     lv::RayTracerInfo rayInfo{};
     info.registerExtension<lv::RayTracer>(rayInfo);
 
-    lv::ImageStoreInfo imageStoreInfo;
-    imageStoreInfo.defineImage(COMPUTE_IMAGE, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_LAYOUT_GENERAL);
-    info.registerExtension<lv::ImageStore>(imageStoreInfo);
 
 
     lv::ComputeShaderInfo compInfo{};
@@ -22,7 +24,7 @@ int main(int argc, char** argv) {
 
     lv::RasterizerInfo rastInfo("app/shaders_bin/quad.vert.spv", "app/shaders_bin/quad.frag.spv");
     rastInfo.defineAttachment(0, [](lv::FrameContext& frame) { return frame.swapchain.vkView; });
-    rastInfo.defineTexture(0, [](lv::FrameContext& frame) { return frame.getExtFrame<lv::ImageStoreFrame>().get(COMPUTE_IMAGE).view; });
+    rastInfo.defineTexture(0, [](lv::FrameContext& frame) { return frame.getExtFrame<lv::ImageStoreFrame>().get(lv::ImageID(1)).view; });
     info.registerExtension<lv::Rasterizer>(rastInfo);
 
 
@@ -31,6 +33,7 @@ int main(int argc, char** argv) {
     auto computeShader = ctx.getExtension<lv::ComputeShader>();
     auto imageStore = ctx.getExtension<lv::ImageStore>();
     auto rasterizer = ctx.getExtension<lv::Rasterizer>();
+    auto raytracer = ctx.getExtension<lv::RayTracer>();
 
     lv::WindowInfo windowInfo;
     windowInfo.width = 640;
@@ -40,7 +43,7 @@ int main(int argc, char** argv) {
     uint32_t tick = 0;
     while(!window.shouldClose()) {
         double ping = glfwGetTime();
-        window.nextFrame([computeShader, rasterizer](lv::FrameContext& frame) {
+        window.nextFrame([raytracer, computeShader, rasterizer](lv::FrameContext& frame) {
             auto compFrame = frame.getExtFrame<lv::ComputeFrame>();
             auto imgStore = frame.getExtFrame<lv::ImageStoreFrame>();
             auto imgStorePrev = frame.fPrev->getExtFrame<lv::ImageStoreFrame>();
@@ -53,9 +56,12 @@ int main(int argc, char** argv) {
             vkCmdDispatch(frame.commandBuffer, frame.swapchain.width/16, frame.swapchain.height/16, 1);
             
 
+            // Run the raytracer
+            raytracer->render(frame);
+
             // Prepare the image to be sampled when rendering to the screen
             auto barrier = vks::initializers::imageMemoryBarrier(
-                    imgStore.get(COMPUTE_IMAGE).image,
+                    imgStore.get(lv::ImageID(1)).image,
                     VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
             vkCmdPipelineBarrier(
                     frame.commandBuffer,
@@ -70,9 +76,10 @@ int main(int argc, char** argv) {
             vkCmdDraw(frame.commandBuffer, 3, 1, 0, 0);
             rasterizer->endPass(frame);
 
+
             // Prepare the image to be sampled when rendering to the screen
             barrier = vks::initializers::imageMemoryBarrier(
-                    imgStore.get(COMPUTE_IMAGE).image,
+                    imgStore.get(lv::ImageID(1)).image,
                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
             vkCmdPipelineBarrier(
                     frame.commandBuffer,
@@ -82,6 +89,7 @@ int main(int argc, char** argv) {
                     0, nullptr,
                     0, nullptr,
                     1, &barrier);
+
         });
 
         if (tick++ % 100 == 0) {
