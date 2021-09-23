@@ -13,6 +13,18 @@ RayTracer::RayTracer(AppContext& ctx, RayTracerInfo info) : AppExt<RayTracerFram
 }
 
 RayTracer::~RayTracer() {
+    buffertools::destroyBuffer(ctx, vertexBuffer);
+    buffertools::destroyBuffer(ctx, indexBuffer);
+    buffertools::destroyBuffer(ctx, transformBuffer);
+    buffertools::destroyBuffer(ctx, raygenShaderBindingTable);
+    buffertools::destroyBuffer(ctx, missShaderBindingTable);
+    buffertools::destroyBuffer(ctx, hitShaderBindingTable);
+    destroyAccelerationStructure(topAC);
+    destroyAccelerationStructure(bottomAC);
+
+    vkDestroyPipeline(ctx.vkDevice, pipeline, nullptr);
+    vkDestroyPipelineLayout(ctx.vkDevice, pipelineLayout, nullptr);
+    vkDestroyDescriptorSetLayout(ctx.vkDevice, descriptorSetLayout, nullptr);
 }
 
 RayTracerFrame* RayTracer::buildFrame(FrameContext& frame) {
@@ -24,7 +36,7 @@ RayTracerFrame* RayTracer::buildFrame(FrameContext& frame) {
     VkWriteDescriptorSetAccelerationStructureKHR writeASInfo{};
     writeASInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
     writeASInfo.accelerationStructureCount = 1;
-    writeASInfo.pAccelerationStructures = &topAC.handle;
+    writeASInfo.pAccelerationStructures = &topAC.AShandle;
 
     VkWriteDescriptorSet writeAS{};
     writeAS.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -65,35 +77,21 @@ void RayTracer::loadFunctions() {
 
 }
 
-RayTracingScratchBuffer RayTracer::createScratchBuffer(VkDeviceSize size) {
-    RayTracingScratchBuffer scratchBuffer{};
+AddressedBuffer RayTracer::createScratchBuffer(VkDeviceSize size) {
+    AddressedBuffer scratchBuffer{};
+    VkBufferUsageFlags usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 
-    auto bufferInfo = vks::initializers::bufferCreateInfo(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, size);
-    auto allocCreateInfo = VmaAllocationCreateInfo { 
-        .usage = VMA_MEMORY_USAGE_GPU_ONLY,
-    };
-
-    vkCheck(vmaCreateBuffer(ctx.vmaAllocator, &bufferInfo, &allocCreateInfo, &scratchBuffer.handle, &scratchBuffer.memory, nullptr));
-
-    VkBufferDeviceAddressInfoKHR bufferDeviceAddressInfo{
-        .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
-        .buffer = scratchBuffer.handle,
-    };
-    scratchBuffer.deviceAddress = vkGetBufferDeviceAddress(ctx.vkDevice, &bufferDeviceAddressInfo);
+    buffertools::createH2D_buffer(ctx, usage, size, &scratchBuffer);
+    scratchBuffer.deviceAddress = getBufferDeviceAddress(scratchBuffer.buffer);
     return scratchBuffer;
 }
 
-void RayTracer::destroyScratchBuffer(RayTracingScratchBuffer& scratchBuffer) {
-    vmaDestroyBuffer(ctx.vmaAllocator, scratchBuffer.handle, scratchBuffer.memory);
-}
-
 AccelerationStructure RayTracer::createAccelerationStructureBuffer(VkAccelerationStructureBuildSizesInfoKHR buildSizeInfo) {
+    VkBufferUsageFlags usage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     AccelerationStructure ret{};
-    auto bufferInfo = vks::initializers::bufferCreateInfo(VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, buildSizeInfo.accelerationStructureSize);
-    auto allocCreateInfo = VmaAllocationCreateInfo { 
-        .usage = VMA_MEMORY_USAGE_GPU_ONLY,
-    };
-    vkCheck(vmaCreateBuffer(ctx.vmaAllocator, &bufferInfo, &allocCreateInfo, &ret.buffer, &ret.memory, nullptr));
+
+    buffertools::createH2D_buffer(ctx, usage, buildSizeInfo.accelerationStructureSize, &ret);
+    ret.deviceAddress = getBufferDeviceAddress(ret.buffer);
     return ret;
 }
 
@@ -181,18 +179,23 @@ void RayTracer::createRayTracingPipeline() {
     rayTracingPipelineCI.maxPipelineRayRecursionDepth = 1;
     rayTracingPipelineCI.layout = pipelineLayout;
     vkCheck(vkCreateRayTracingPipelinesKHR(ctx.vkDevice, VK_NULL_HANDLE, VK_NULL_HANDLE, 1, &rayTracingPipelineCI, nullptr, &pipeline));
+
+    for(const auto& stage : shaderStages) {
+        vkDestroyShaderModule(ctx.vkDevice, stage.module, nullptr);
+    }
 }
 
 void RayTracer::createBottomLevelAccelerationStructure() {
     struct Vertex { float pos[3]; };
 
-    std::array<Vertex, 3> vertices {
+    std::array<Vertex, 4> vertices {
+        Vertex { .pos = { -1.0f, -1.0f, 0.0f }},
+        Vertex { .pos = {  1.0f, -1.0f, 0.0f }},
         Vertex { .pos = {  1.0f,  1.0f, 0.0f }},
         Vertex { .pos = { -1.0f,  1.0f, 0.0f }},
-        Vertex { .pos = {  0.0f, -1.0f, 0.0f }},
     };
 
-    std::array<uint32_t, 3> indices = { 0, 1, 2 };
+    std::array<uint32_t, 6> indices = { 0, 1, 2, 2, 3, 0 };
 
     VkTransformMatrixKHR transformMatrix = {
         1.0f, 0.0f, 0.0f, 0.0f,
@@ -201,43 +204,18 @@ void RayTracer::createBottomLevelAccelerationStructure() {
     };
 
 
-    {
-        auto vertexBufferInfo = vks::initializers::bufferCreateInfo(VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR, vertices.size() * sizeof(Vertex));
-        auto vertexAllocInfo = VmaAllocationCreateInfo { .usage = VMA_MEMORY_USAGE_CPU_TO_GPU };
-        vkCheck(vmaCreateBuffer(ctx.vmaAllocator, &vertexBufferInfo, &vertexAllocInfo, &vertexBuffer, &vertexBufferMemory, nullptr));
-        void* vertexData;
-        vkCheck(vmaMapMemory(ctx.vmaAllocator, vertexBufferMemory, &vertexData));
-        memcpy(vertexData, vertices.data(), vertices.size() * sizeof(Vertex));
-        vmaUnmapMemory(ctx.vmaAllocator, vertexBufferMemory);
-    }
-
-    {
-        auto indexBufferInfo = vks::initializers::bufferCreateInfo(VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR, indices.size() * sizeof(uint32_t));
-        auto indexAllocInfo = VmaAllocationCreateInfo { .usage = VMA_MEMORY_USAGE_CPU_TO_GPU };
-        vkCheck(vmaCreateBuffer(ctx.vmaAllocator, &indexBufferInfo, &indexAllocInfo, &indexBuffer, &indexBufferMemory, nullptr));
-        void* indexData;
-        vkCheck(vmaMapMemory(ctx.vmaAllocator, indexBufferMemory, &indexData));
-        memcpy(indexData, indices.data(), indices.size() * sizeof(uint32_t));
-        vmaUnmapMemory(ctx.vmaAllocator, indexBufferMemory);
-    }
-
-    {
-        auto transformBufferInfo = vks::initializers::bufferCreateInfo(VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR, sizeof(VkTransformMatrixKHR));
-        auto transformAllocInfo = VmaAllocationCreateInfo { .usage = VMA_MEMORY_USAGE_CPU_TO_GPU };
-        vkCheck(vmaCreateBuffer(ctx.vmaAllocator, &transformBufferInfo, &transformAllocInfo, &transformBuffer, &transformBufferMemory, nullptr));
-        void* transformData;
-        vkCheck(vmaMapMemory(ctx.vmaAllocator, transformBufferMemory, &transformData));
-        memcpy(transformData, &transformMatrix, sizeof(VkTransformMatrixKHR));
-        vmaUnmapMemory(ctx.vmaAllocator, transformBufferMemory);
-    }
+    const VkBufferUsageFlags bufferUsage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
+    buffertools::createH2D_buffer_data(ctx, bufferUsage, vertices.size() * sizeof(Vertex), vertices.data(), &vertexBuffer);
+    buffertools::createH2D_buffer_data(ctx, bufferUsage, indices.size() * sizeof(uint32_t), indices.data(), &indexBuffer);
+    buffertools::createH2D_buffer_data(ctx, bufferUsage, sizeof(VkTransformMatrixKHR), &transformMatrix, &transformBuffer);
 
     VkDeviceOrHostAddressConstKHR vertexBufferDeviceAddress{};
     VkDeviceOrHostAddressConstKHR indexBufferDeviceAddress{};
     VkDeviceOrHostAddressConstKHR transformBufferDeviceAddress{};
 
-    vertexBufferDeviceAddress.deviceAddress = getBufferDeviceAddress(vertexBuffer);
-    indexBufferDeviceAddress.deviceAddress = getBufferDeviceAddress(indexBuffer);
-    transformBufferDeviceAddress.deviceAddress = getBufferDeviceAddress(transformBuffer);
+    vertexBufferDeviceAddress.deviceAddress = getBufferDeviceAddress(vertexBuffer.buffer);
+    indexBufferDeviceAddress.deviceAddress = getBufferDeviceAddress(indexBuffer.buffer);
+    transformBufferDeviceAddress.deviceAddress = getBufferDeviceAddress(transformBuffer.buffer);
 
     // The actual build
     VkAccelerationStructureGeometryTrianglesDataKHR triangleData {
@@ -264,7 +242,7 @@ void RayTracer::createBottomLevelAccelerationStructure() {
     accelerationStructureBuildGeometryInfo.geometryCount = 1;
     accelerationStructureBuildGeometryInfo.pGeometries = &accelerationStructureGeometry;
 
-    const uint32_t numTriangles = 1;
+    const uint32_t numTriangles = indices.size() / 3;
     VkAccelerationStructureBuildSizesInfoKHR accelerationStructureBuildSizesInfo{};
     accelerationStructureBuildSizesInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
     vkGetAccelerationStructureBuildSizesKHR(ctx.vkDevice, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &accelerationStructureBuildGeometryInfo, &numTriangles, &accelerationStructureBuildSizesInfo);
@@ -276,12 +254,12 @@ void RayTracer::createBottomLevelAccelerationStructure() {
     accelerationStructureCreateInfo.buffer = bottomAC.buffer;
     accelerationStructureCreateInfo.size = accelerationStructureBuildSizesInfo.accelerationStructureSize;
     accelerationStructureCreateInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
-    vkCheck(vkCreateAccelerationStructureKHR(ctx.vkDevice, &accelerationStructureCreateInfo, nullptr, &bottomAC.handle));
+    vkCheck(vkCreateAccelerationStructureKHR(ctx.vkDevice, &accelerationStructureCreateInfo, nullptr, &bottomAC.AShandle));
 
     auto scratchBuffer = createScratchBuffer(accelerationStructureBuildSizesInfo.buildScratchSize);
 
     accelerationStructureBuildGeometryInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
-    accelerationStructureBuildGeometryInfo.dstAccelerationStructure = bottomAC.handle;
+    accelerationStructureBuildGeometryInfo.dstAccelerationStructure = bottomAC.AShandle;
     accelerationStructureBuildGeometryInfo.scratchData.deviceAddress = scratchBuffer.deviceAddress;
 
     VkAccelerationStructureBuildRangeInfoKHR accelerationStructureBuildRangeInfo{};
@@ -297,11 +275,11 @@ void RayTracer::createBottomLevelAccelerationStructure() {
 
     VkAccelerationStructureDeviceAddressInfoKHR accelerationDeviceAddressInfo{};
     accelerationDeviceAddressInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR;
-    accelerationDeviceAddressInfo.accelerationStructure = bottomAC.handle;
+    accelerationDeviceAddressInfo.accelerationStructure = bottomAC.AShandle;
     bottomAC.deviceAddress = vkGetAccelerationStructureDeviceAddressKHR(ctx.vkDevice, &accelerationDeviceAddressInfo);
     ctx.endSingleTimeCommands(cmdBuffer);
 
-    destroyScratchBuffer(scratchBuffer);
+    buffertools::destroyBuffer(ctx, scratchBuffer);
 }
 
 void RayTracer::createTopLevelAccelerationStructure() {
@@ -319,20 +297,12 @@ void RayTracer::createTopLevelAccelerationStructure() {
     instance.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
     instance.accelerationStructureReference = bottomAC.deviceAddress;
 
-    VkBuffer instanceBuffer;
-    VmaAllocation instanceBufferMemory;
-    {
-        auto bufferInfo = vks::initializers::bufferCreateInfo(VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR, sizeof(VkAccelerationStructureInstanceKHR));
-        VmaAllocationCreateInfo allocInfo { .usage = VMA_MEMORY_USAGE_CPU_TO_GPU };
-        vkCheck(vmaCreateBuffer(ctx.vmaAllocator, &bufferInfo, &allocInfo, &instanceBuffer, &instanceBufferMemory, nullptr));
-        void* data;
-        vkCheck(vmaMapMemory(ctx.vmaAllocator, instanceBufferMemory, &data));
-        memcpy(data, &instance, sizeof(VkAccelerationStructureInstanceKHR));
-        vmaUnmapMemory(ctx.vmaAllocator, instanceBufferMemory);
-    }
+    Buffer instanceBuffer;
+    const VkBufferUsageFlags usage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT_KHR | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
+    buffertools::createH2D_buffer_data(ctx, usage, sizeof(VkAccelerationStructureInstanceKHR), &instance, &instanceBuffer);
 
     VkDeviceOrHostAddressConstKHR instanceDataDeviceAddress{};
-    instanceDataDeviceAddress.deviceAddress = getBufferDeviceAddress(instanceBuffer);
+    instanceDataDeviceAddress.deviceAddress = getBufferDeviceAddress(instanceBuffer.buffer);
 
     VkAccelerationStructureGeometryKHR accelerationStructureGeometry {};
     accelerationStructureGeometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
@@ -363,7 +333,7 @@ void RayTracer::createTopLevelAccelerationStructure() {
     ASInfo.buffer = topAC.buffer;
     ASInfo.size = buildSizesInfo.accelerationStructureSize;
     ASInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
-    vkCheck(vkCreateAccelerationStructureKHR(ctx.vkDevice, &ASInfo, nullptr, &topAC.handle));
+    vkCheck(vkCreateAccelerationStructureKHR(ctx.vkDevice, &ASInfo, nullptr, &topAC.AShandle));
 
     auto scratchBuffer = createScratchBuffer(buildSizesInfo.buildScratchSize);
 
@@ -372,7 +342,7 @@ void RayTracer::createTopLevelAccelerationStructure() {
     accelerationBuildGeometryInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
     accelerationBuildGeometryInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
     accelerationBuildGeometryInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
-    accelerationBuildGeometryInfo.dstAccelerationStructure = topAC.handle;
+    accelerationBuildGeometryInfo.dstAccelerationStructure = topAC.AShandle;
     accelerationBuildGeometryInfo.geometryCount = 1;
     accelerationBuildGeometryInfo.pGeometries = &accelerationStructureGeometry;
     accelerationBuildGeometryInfo.scratchData.deviceAddress = scratchBuffer.deviceAddress;
@@ -390,11 +360,11 @@ void RayTracer::createTopLevelAccelerationStructure() {
 
     VkAccelerationStructureDeviceAddressInfoKHR addressInfo{};
     addressInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR;
-    addressInfo.accelerationStructure = topAC.handle;
+    addressInfo.accelerationStructure = topAC.AShandle;
     topAC.deviceAddress = vkGetAccelerationStructureDeviceAddressKHR(ctx.vkDevice, &addressInfo);
 
-    destroyScratchBuffer(scratchBuffer);
-    vmaDestroyBuffer(ctx.vmaAllocator, instanceBuffer, instanceBufferMemory);
+    buffertools::destroyBuffer(ctx, scratchBuffer);
+    buffertools::destroyBuffer(ctx, instanceBuffer);
 }
 
 void RayTracer::createShaderBindingTable() {
@@ -407,24 +377,14 @@ void RayTracer::createShaderBindingTable() {
     vkCheck(vkGetRayTracingShaderGroupHandlesKHR(ctx.vkDevice, pipeline, 0, groupCount, sbtSize, shaderHandleStorage.data()));
 
     const VkBufferUsageFlags bufferUsageFlags = VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-    auto bufferInfo = vks::initializers::bufferCreateInfo(bufferUsageFlags, static_cast<VkDeviceSize>(handleSize));
-    auto allocInfo = VmaAllocationCreateInfo { .usage = VMA_MEMORY_USAGE_CPU_TO_GPU };
-    vkCheck(vmaCreateBuffer(ctx.vmaAllocator, &bufferInfo, &allocInfo, &raygenShaderBindingTable, &raygenShaderBindingTableMemory, nullptr));
-    vkCheck(vmaCreateBuffer(ctx.vmaAllocator, &bufferInfo, &allocInfo, &missShaderBindingTable, &missShaderBindingTableMemory, nullptr));
-    vkCheck(vmaCreateBuffer(ctx.vmaAllocator, &bufferInfo, &allocInfo, &hitShaderBindingTable, &hitShaderBindingTableMemory, nullptr));
+    buffertools::createH2D_buffer_data(ctx, bufferUsageFlags, handleSize, shaderHandleStorage.data() + handleSizeAlligned * 0, &raygenShaderBindingTable);
+    buffertools::createH2D_buffer_data(ctx, bufferUsageFlags, handleSize, shaderHandleStorage.data() + handleSizeAlligned * 1, &missShaderBindingTable);
+    buffertools::createH2D_buffer_data(ctx, bufferUsageFlags, handleSize, shaderHandleStorage.data() + handleSizeAlligned * 2, &hitShaderBindingTable);
+}
 
-    void* data;
-    vkCheck(vmaMapMemory(ctx.vmaAllocator, raygenShaderBindingTableMemory, &data));
-    memcpy(data, shaderHandleStorage.data() + handleSizeAlligned * 0, handleSize);
-    vmaUnmapMemory(ctx.vmaAllocator, raygenShaderBindingTableMemory);
-
-    vkCheck(vmaMapMemory(ctx.vmaAllocator, missShaderBindingTableMemory, &data));
-    memcpy(data, shaderHandleStorage.data() + handleSizeAlligned * 1, handleSize);
-    vmaUnmapMemory(ctx.vmaAllocator, missShaderBindingTableMemory);
-
-    vkCheck(vmaMapMemory(ctx.vmaAllocator, hitShaderBindingTableMemory, &data));
-    memcpy(data, shaderHandleStorage.data() + handleSizeAlligned * 2, handleSize);
-    vmaUnmapMemory(ctx.vmaAllocator, hitShaderBindingTableMemory);
+void RayTracer::destroyAccelerationStructure(AccelerationStructure& structure) const {
+    vkDestroyAccelerationStructureKHR(ctx.vkDevice, structure.AShandle, nullptr);
+    buffertools::destroyBuffer(ctx, structure);
 }
 
 
@@ -432,17 +392,17 @@ void RayTracer::render(FrameContext& frame) const {
     const uint32_t handleSizeAligned = vks::tools::alignedSize(rayTracingPipelineProperties.shaderGroupHandleSize, rayTracingPipelineProperties.shaderGroupHandleAlignment);
 
     VkStridedDeviceAddressRegionKHR raygenShaderSbtEntry{};
-    raygenShaderSbtEntry.deviceAddress = getBufferDeviceAddress(raygenShaderBindingTable);
+    raygenShaderSbtEntry.deviceAddress = getBufferDeviceAddress(raygenShaderBindingTable.buffer);
     raygenShaderSbtEntry.stride = handleSizeAligned;
     raygenShaderSbtEntry.size = handleSizeAligned;
 
     VkStridedDeviceAddressRegionKHR missShaderSbtEntry{};
-    missShaderSbtEntry.deviceAddress = getBufferDeviceAddress(missShaderBindingTable);
+    missShaderSbtEntry.deviceAddress = getBufferDeviceAddress(missShaderBindingTable.buffer);
     missShaderSbtEntry.stride = handleSizeAligned;
     missShaderSbtEntry.size = handleSizeAligned;
 
     VkStridedDeviceAddressRegionKHR hitShaderSbtEntry{};
-    hitShaderSbtEntry.deviceAddress = getBufferDeviceAddress(hitShaderBindingTable);
+    hitShaderSbtEntry.deviceAddress = getBufferDeviceAddress(hitShaderBindingTable.buffer);
     hitShaderSbtEntry.stride = handleSizeAligned;
     hitShaderSbtEntry.size = handleSizeAligned;
 
@@ -451,7 +411,7 @@ void RayTracer::render(FrameContext& frame) const {
     vkCmdBindPipeline(frame.commandBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipeline);
     vkCmdBindDescriptorSets(frame.commandBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipelineLayout, 0, 1, &frame.getExtFrame<RayTracerFrame>().descriptorSet, 0, 0);
 
-    vkCmdTraceRaysKHR(frame.commandBuffer, &raygenShaderSbtEntry, &missShaderSbtEntry, &hitShaderSbtEntry, &callableShaderSbtEntry,frame.swapchain.width, frame.swapchain.height,1);
+    vkCmdTraceRaysKHR(frame.commandBuffer, &raygenShaderSbtEntry, &missShaderSbtEntry, &hitShaderSbtEntry, &callableShaderSbtEntry, frame.swapchain.width, frame.swapchain.height,1);
 }
 
 }

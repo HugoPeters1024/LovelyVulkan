@@ -14,8 +14,6 @@ int main(int argc, char** argv) {
     lv::RayTracerInfo rayInfo{};
     info.registerExtension<lv::RayTracer>(rayInfo);
 
-
-
     lv::ComputeShaderInfo compInfo{};
     compInfo.addImageBinding(0, 0, [](lv::FrameContext& frame) { return &frame.fPrev->getExtFrame<lv::ImageStoreFrame>().get(COMPUTE_IMAGE).view; });
     compInfo.addImageBinding(0, 1, [](lv::FrameContext& frame) { return &frame.getExtFrame<lv::ImageStoreFrame>().get(COMPUTE_IMAGE).view; });

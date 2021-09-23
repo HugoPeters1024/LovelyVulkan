@@ -2,22 +2,19 @@
 #include "precomp.h"
 #include "AppContext.h"
 #include "AppExt.h"
+#include "BufferTools.h"
 
 namespace lv {
 
 class RayTracer;
 
-struct RayTracingScratchBuffer {
+struct AddressedBuffer : public Buffer {
     uint64_t deviceAddress = 0;
-    VkBuffer handle = VK_NULL_HANDLE;
-    VmaAllocation memory = VK_NULL_HANDLE;
 };
 
-struct AccelerationStructure {
-    VkAccelerationStructureKHR handle;
+struct AccelerationStructure : public Buffer {
+    VkAccelerationStructureKHR AShandle;
     uint64_t deviceAddress = 0;
-    VmaAllocation memory;
-    VkBuffer buffer;
 };
 
 template<>
@@ -66,8 +63,7 @@ public:
 
 private:
     void loadFunctions();
-    RayTracingScratchBuffer createScratchBuffer(VkDeviceSize size);
-    void destroyScratchBuffer(RayTracingScratchBuffer& scratchBuffer);
+    AddressedBuffer createScratchBuffer(VkDeviceSize size);
     AccelerationStructure createAccelerationStructureBuffer(VkAccelerationStructureBuildSizesInfoKHR buildSizeInfo);
 
     void getFeatures();
@@ -76,35 +72,29 @@ private:
     void createTopLevelAccelerationStructure();
     void createShaderBindingTable();
 
+    void destroyAccelerationStructure(AccelerationStructure& structure) const;
     uint64_t getBufferDeviceAddress(VkBuffer buffer) const;
 
     RayTracerInfo info;
-    VkBuffer vertexBuffer;
-    VmaAllocation vertexBufferMemory;
-    VkBuffer indexBuffer;
-    VmaAllocation indexBufferMemory;
-    VkBuffer transformBuffer;
-    VmaAllocation transformBufferMemory;
+
+    Buffer vertexBuffer; 
+    Buffer indexBuffer;
+    Buffer transformBuffer;
 
     std::vector<VkRayTracingShaderGroupCreateInfoKHR> shaderGroups{};
 
     VkDescriptorSetLayout descriptorSetLayout;
     VkPipelineLayout pipelineLayout;
     VkPipeline pipeline;
-
-    VkBuffer raygenShaderBindingTable;
-    VmaAllocation raygenShaderBindingTableMemory;
-    VkBuffer missShaderBindingTable;
-    VmaAllocation missShaderBindingTableMemory;
-    VkBuffer hitShaderBindingTable;
-    VmaAllocation hitShaderBindingTableMemory;
+    Buffer raygenShaderBindingTable;
+    Buffer missShaderBindingTable;
+    Buffer hitShaderBindingTable;
 
     VkPhysicalDeviceRayTracingPipelinePropertiesKHR rayTracingPipelineProperties{};
     VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures{};
 
     AccelerationStructure bottomAC;
     AccelerationStructure topAC;
-
 };
 
 
