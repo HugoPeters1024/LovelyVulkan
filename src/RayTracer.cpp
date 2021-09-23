@@ -137,6 +137,7 @@ void RayTracer::createRayTracingPipeline() {
         shaderStages.push_back(vks::initializers::pipelineShaderStageCreateInfo(vks::tools::loadShader("./app/shaders_bin/raygen.rgen.spv", ctx.vkDevice), VK_SHADER_STAGE_RAYGEN_BIT_KHR));
         VkRayTracingShaderGroupCreateInfoKHR shaderGroup{};
         shaderGroup.sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
+        shaderGroup.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
         shaderGroup.generalShader = static_cast<uint32_t>(shaderStages.size()) - 1;
         shaderGroup.closestHitShader = VK_SHADER_UNUSED_KHR;
         shaderGroup.anyHitShader = VK_SHADER_UNUSED_KHR;
