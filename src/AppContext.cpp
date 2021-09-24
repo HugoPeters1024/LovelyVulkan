@@ -1,6 +1,4 @@
 #include "AppContext.h"
-#define VMA_IMPLEMENTATION
-#include <vks/vk_mem_alloc.hpp>
 #include "Utils.h"
 
 namespace lv {

@@ -35,6 +35,7 @@ struct FrameContext {
     }
 
     void* getExtFrame(std::type_index typeName) {
+        assert(extensionFrame.find(typeName) != extensionFrame.end() && "No extension with this frame registered");
         return extensionFrame[typeName];
     }
 };

@@ -8,10 +8,6 @@ namespace lv {
 
 class RayTracer;
 
-struct AddressedBuffer : public Buffer {
-    uint64_t deviceAddress = 0;
-};
-
 struct AccelerationStructure : public Buffer {
     VkAccelerationStructureKHR AShandle;
     uint64_t deviceAddress = 0;
@@ -32,11 +28,21 @@ struct app_extensions<RayTracer> {
     }
 };
 
-struct RayTracerFrame {
-    VkDescriptorSet descriptorSet;
+struct RayTracerCamera {
+    glm::mat4 viewInverse;
+    glm::mat4 projInverse;
 };
 
+struct RayTracerFrame {
+    VkDescriptorSet descriptorSet;
+    Buffer cameraBuffer;
+};
+
+
 struct RayTracerInfo {
+    struct Vertex { float pos[3]; };
+    std::vector<Vertex> vertexData;
+    std::vector<uint32_t> indexData;
 };
 
 class RayTracer : public AppExt<RayTracerFrame> {
@@ -48,7 +54,7 @@ public:
     RayTracerFrame* buildFrame(FrameContext& frame) override;
     void destroyFrame(RayTracerFrame* frame) override;
 
-    void render(FrameContext& frame) const;
+    void render(FrameContext& frame, glm::mat4 viewMatrix) const;
 
 	PFN_vkGetBufferDeviceAddressKHR vkGetBufferDeviceAddressKHR;
 	PFN_vkCreateAccelerationStructureKHR vkCreateAccelerationStructureKHR;
@@ -63,7 +69,7 @@ public:
 
 private:
     void loadFunctions();
-    AddressedBuffer createScratchBuffer(VkDeviceSize size);
+    Buffer createScratchBuffer(VkDeviceSize size);
     AccelerationStructure createAccelerationStructureBuffer(VkAccelerationStructureBuildSizesInfoKHR buildSizeInfo);
 
     void getFeatures();

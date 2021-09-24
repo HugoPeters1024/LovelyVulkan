@@ -35,6 +35,8 @@ link_directories(${CMAKE_SOURCE_DIR}/external/spdlog)
 include_directories(lovelyvulkan PRIVATE ${CMAKE_SOURCE_DIR}/external/spdlog/include/)
 target_link_libraries(lovelyvulkan spdlog)
 
+include_directories(lovelyvulkan PRIVATE ${CMAKE_SOURCE_DIR}/external/tiny_obj_loader)
+
 find_package(Vulkan REQUIRED)
 target_link_libraries(lovelyvulkan Vulkan::Vulkan)
 

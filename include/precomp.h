@@ -50,6 +50,9 @@ typedef unsigned char uchar;
 #include <spdlog/spdlog.h>
 namespace logger = spdlog;
 
+// TINY OBJ LOADER
+#include <tiny_obj_loader.h>
+
 // UTILS
 namespace lv {
     class NoCopy {

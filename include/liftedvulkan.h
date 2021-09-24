@@ -7,5 +7,6 @@
 #include "Rasterizer.h"
 #include "RayTracer.h"
 #include "ImageStore.h"
+#include "Camera.h"
 
 

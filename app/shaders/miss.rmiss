@@ -1,8 +1,12 @@
 #version 460
 #extension GL_EXT_ray_tracing : enable
 
-layout(location = 0) rayPayloadInEXT vec3 hitValue;
+layout(location = 0) rayPayloadInEXT Payload {
+    vec3 direction;
+    vec3 color;
+} payload;
 
 void main() {
-    hitValue = vec3(0.0f, 1.0f, 0.2f);
+    //payload.color = vec3(pow(dot(payload.direction, vec3(0,0,1)),4));
+    payload.color += vec3(0, 0, 0.045f);
 }

@@ -30,6 +30,17 @@ RayTracer::~RayTracer() {
 RayTracerFrame* RayTracer::buildFrame(FrameContext& frame) {
     auto ret = new RayTracerFrame();
 
+    glm::mat4 viewMatrix(1.0f);
+    const float aspectRatio = frame.swapchain.width / frame.swapchain.height;
+    glm::mat4 projectionMatrix = glm::perspective(45.0f, aspectRatio, 0.1f, 100.0f);
+
+    RayTracerCamera camera {
+        .viewInverse = glm::inverse(viewMatrix),
+        .projInverse = glm::inverse(projectionMatrix),
+    };
+
+    buffertools::createH2D_buffer_data(ctx, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, sizeof(RayTracerCamera), &camera, &ret->cameraBuffer);
+
     auto allocInfo = vks::initializers::descriptorSetAllocateInfo(ctx.vkDescriptorPool, &descriptorSetLayout, 1);
     vkCheck(vkAllocateDescriptorSets(ctx.vkDevice, &allocInfo, &ret->descriptorSet));
 
@@ -46,21 +57,25 @@ RayTracerFrame* RayTracer::buildFrame(FrameContext& frame) {
     writeAS.descriptorCount = 1;
     writeAS.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
 
-    auto imageFrame = frame.getExtFrame<lv::ImageStoreFrame>();
-
     VkDescriptorImageInfo imageDescriptorInfo{};
-    imageDescriptorInfo.imageView = imageFrame.get(lv::ImageID(1)).view;
+    imageDescriptorInfo.imageView = frame.getExtFrame<lv::ImageStoreFrame>().get(lv::ImageID(1)).view;
     imageDescriptorInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-
     auto imageWrite = vks::initializers::writeDescriptorSet(ret->descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, &imageDescriptorInfo);
 
+    VkDescriptorBufferInfo bufferDescriptorInfo{};
+    bufferDescriptorInfo.buffer = ret->cameraBuffer.buffer;
+    bufferDescriptorInfo.offset = 0;
+    bufferDescriptorInfo.range = VK_WHOLE_SIZE;
+    VkWriteDescriptorSet uniformBufferWrite = vks::initializers::writeDescriptorSet(ret->descriptorSet, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2, &bufferDescriptorInfo);
 
-    std::array<VkWriteDescriptorSet, 2> writes { writeAS, imageWrite };
+
+    std::array<VkWriteDescriptorSet, 3> writes { writeAS, imageWrite, uniformBufferWrite };
     vkUpdateDescriptorSets(ctx.vkDevice, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
     return ret;
 }
 
 void RayTracer::destroyFrame(RayTracerFrame* frame) {
+    buffertools::destroyBuffer(ctx, frame->cameraBuffer);
 }
 
 void RayTracer::loadFunctions() {
@@ -77,12 +92,11 @@ void RayTracer::loadFunctions() {
 
 }
 
-AddressedBuffer RayTracer::createScratchBuffer(VkDeviceSize size) {
-    AddressedBuffer scratchBuffer{};
+Buffer RayTracer::createScratchBuffer(VkDeviceSize size) {
+    Buffer scratchBuffer{};
     VkBufferUsageFlags usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 
     buffertools::createH2D_buffer(ctx, usage, size, &scratchBuffer);
-    scratchBuffer.deviceAddress = getBufferDeviceAddress(scratchBuffer.buffer);
     return scratchBuffer;
 }
 
@@ -187,27 +201,17 @@ void RayTracer::createRayTracingPipeline() {
 }
 
 void RayTracer::createBottomLevelAccelerationStructure() {
-    struct Vertex { float pos[3]; };
-
-    std::array<Vertex, 4> vertices {
-        Vertex { .pos = { -1.0f, -1.0f, 0.0f }},
-        Vertex { .pos = {  1.0f, -1.0f, 0.0f }},
-        Vertex { .pos = {  1.0f,  1.0f, 0.0f }},
-        Vertex { .pos = { -1.0f,  1.0f, 0.0f }},
-    };
-
-    std::array<uint32_t, 6> indices = { 0, 1, 2, 2, 3, 0 };
-
+    float scale = 0.4f;
     VkTransformMatrixKHR transformMatrix = {
-        1.0f, 0.0f, 0.0f, 0.0f,
-        0.0f, 1.0f, 0.0f, 0.0f,
-        0.0f, 0.0f, 1.0f, 0.0f,
+        scale, 0.0f, 0.0f, 0.0f,
+        0.0f, -scale, 0.0f, 0.0f,
+        0.0f, 0.0f, scale, 0.0f,
     };
 
 
     const VkBufferUsageFlags bufferUsage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
-    buffertools::createH2D_buffer_data(ctx, bufferUsage, vertices.size() * sizeof(Vertex), vertices.data(), &vertexBuffer);
-    buffertools::createH2D_buffer_data(ctx, bufferUsage, indices.size() * sizeof(uint32_t), indices.data(), &indexBuffer);
+    buffertools::createH2D_buffer_data(ctx, bufferUsage, info.vertexData.size() * sizeof(RayTracerInfo::Vertex), info.vertexData.data(), &vertexBuffer);
+    buffertools::createH2D_buffer_data(ctx, bufferUsage, info.indexData.size() * sizeof(uint32_t), info.indexData.data(), &indexBuffer);
     buffertools::createH2D_buffer_data(ctx, bufferUsage, sizeof(VkTransformMatrixKHR), &transformMatrix, &transformBuffer);
 
     VkDeviceOrHostAddressConstKHR vertexBufferDeviceAddress{};
@@ -223,7 +227,7 @@ void RayTracer::createBottomLevelAccelerationStructure() {
         .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR,
         .vertexFormat = VK_FORMAT_R32G32B32_SFLOAT,
         .vertexData = vertexBufferDeviceAddress,
-        .vertexStride = sizeof(Vertex),
+        .vertexStride = sizeof(RayTracerInfo::Vertex),
         .maxVertex = 3,
         .indexType = VK_INDEX_TYPE_UINT32,
         .indexData = indexBufferDeviceAddress,
@@ -243,7 +247,7 @@ void RayTracer::createBottomLevelAccelerationStructure() {
     accelerationStructureBuildGeometryInfo.geometryCount = 1;
     accelerationStructureBuildGeometryInfo.pGeometries = &accelerationStructureGeometry;
 
-    const uint32_t numTriangles = indices.size() / 3;
+    const uint32_t numTriangles = info.indexData.size() / 3;
     VkAccelerationStructureBuildSizesInfoKHR accelerationStructureBuildSizesInfo{};
     accelerationStructureBuildSizesInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
     vkGetAccelerationStructureBuildSizesKHR(ctx.vkDevice, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &accelerationStructureBuildGeometryInfo, &numTriangles, &accelerationStructureBuildSizesInfo);
@@ -261,7 +265,7 @@ void RayTracer::createBottomLevelAccelerationStructure() {
 
     accelerationStructureBuildGeometryInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
     accelerationStructureBuildGeometryInfo.dstAccelerationStructure = bottomAC.AShandle;
-    accelerationStructureBuildGeometryInfo.scratchData.deviceAddress = scratchBuffer.deviceAddress;
+    accelerationStructureBuildGeometryInfo.scratchData.deviceAddress = getBufferDeviceAddress(scratchBuffer.buffer);
 
     VkAccelerationStructureBuildRangeInfoKHR accelerationStructureBuildRangeInfo{};
     accelerationStructureBuildRangeInfo.primitiveCount = numTriangles;
@@ -346,7 +350,7 @@ void RayTracer::createTopLevelAccelerationStructure() {
     accelerationBuildGeometryInfo.dstAccelerationStructure = topAC.AShandle;
     accelerationBuildGeometryInfo.geometryCount = 1;
     accelerationBuildGeometryInfo.pGeometries = &accelerationStructureGeometry;
-    accelerationBuildGeometryInfo.scratchData.deviceAddress = scratchBuffer.deviceAddress;
+    accelerationBuildGeometryInfo.scratchData.deviceAddress = getBufferDeviceAddress(scratchBuffer.buffer);
  
     VkAccelerationStructureBuildRangeInfoKHR accelerationStructureBuildRangeInfo{};
     accelerationStructureBuildRangeInfo.primitiveCount = 1;
@@ -389,8 +393,23 @@ void RayTracer::destroyAccelerationStructure(AccelerationStructure& structure) c
 }
 
 
-void RayTracer::render(FrameContext& frame) const {
+void RayTracer::render(FrameContext& frame, glm::mat4 viewMatrix) const {
     const uint32_t handleSizeAligned = vks::tools::alignedSize(rayTracingPipelineProperties.shaderGroupHandleSize, rayTracingPipelineProperties.shaderGroupHandleAlignment);
+
+    const float aspectRatio = frame.swapchain.width / frame.swapchain.height;
+    glm::mat4 projectionMatrix = glm::perspective(45.0f, aspectRatio, 0.1f, 100.0f);
+
+    RayTracerCamera camera {
+        .viewInverse = glm::inverse(viewMatrix),
+        .projInverse = glm::inverse(projectionMatrix),
+    };
+
+    auto myFrame = frame.getExtFrame<RayTracerFrame>();
+    void* data;
+    vkCheck(vmaMapMemory(ctx.vmaAllocator, myFrame.cameraBuffer.memory, &data));
+    memcpy(data, &camera, sizeof(RayTracerCamera));
+    vmaUnmapMemory(ctx.vmaAllocator, myFrame.cameraBuffer.memory);
+
 
     VkStridedDeviceAddressRegionKHR raygenShaderSbtEntry{};
     raygenShaderSbtEntry.deviceAddress = getBufferDeviceAddress(raygenShaderBindingTable.buffer);
@@ -411,7 +430,6 @@ void RayTracer::render(FrameContext& frame) const {
 
     vkCmdBindPipeline(frame.commandBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipeline);
     vkCmdBindDescriptorSets(frame.commandBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipelineLayout, 0, 1, &frame.getExtFrame<RayTracerFrame>().descriptorSet, 0, 0);
-
     vkCmdTraceRaysKHR(frame.commandBuffer, &raygenShaderSbtEntry, &missShaderSbtEntry, &hitShaderSbtEntry, &callableShaderSbtEntry, frame.swapchain.width, frame.swapchain.height,1);
 }
 

@@ -7,18 +7,25 @@ int main(int argc, char** argv) {
     lv::AppContextInfo info;
 
     lv::ImageStoreInfo imageStoreInfo;
-    imageStoreInfo.defineImage(COMPUTE_IMAGE, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_LAYOUT_GENERAL);
     imageStoreInfo.defineImage(lv::ImageID(1), VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_LAYOUT_GENERAL);
     info.registerExtension<lv::ImageStore>(imageStoreInfo);
 
-    lv::RayTracerInfo rayInfo{};
-    info.registerExtension<lv::RayTracer>(rayInfo);
 
-    lv::ComputeShaderInfo compInfo{};
-    compInfo.addImageBinding(0, 0, [](lv::FrameContext& frame) { return &frame.fPrev->getExtFrame<lv::ImageStoreFrame>().get(COMPUTE_IMAGE).view; });
-    compInfo.addImageBinding(0, 1, [](lv::FrameContext& frame) { return &frame.getExtFrame<lv::ImageStoreFrame>().get(COMPUTE_IMAGE).view; });
-    compInfo.setPushConstantType<float>();
-    info.registerExtension<lv::ComputeShader>("app/shaders_bin/test.comp.spv", compInfo);
+    lv::RayTracerInfo rayInfo{};
+    {
+        tinyobj::ObjReader reader;
+        reader.ParseFromFile("./app/sibenik/sibenik.obj");
+        auto& attrib = reader.GetAttrib();
+        auto& shape = reader.GetShapes()[0];
+        for(size_t v=0; v<attrib.GetVertices().size(); v+=3) {
+            rayInfo.vertexData.push_back(lv::RayTracerInfo::Vertex { attrib.vertices[v+0], attrib.vertices[v+1], attrib.vertices[v+2]});
+        }
+        for(const auto& idx : shape.mesh.indices) {
+            rayInfo.indexData.push_back(idx.vertex_index);
+        }
+
+    }
+    info.registerExtension<lv::RayTracer>(rayInfo);
 
     lv::RasterizerInfo rastInfo("app/shaders_bin/quad.vert.spv", "app/shaders_bin/quad.frag.spv");
     rastInfo.defineAttachment(0, [](lv::FrameContext& frame) { return frame.swapchain.vkView; });
@@ -28,34 +35,28 @@ int main(int argc, char** argv) {
 
     lv::AppContext ctx(info);
 
-    auto computeShader = ctx.getExtension<lv::ComputeShader>();
     auto imageStore = ctx.getExtension<lv::ImageStore>();
     auto rasterizer = ctx.getExtension<lv::Rasterizer>();
     auto raytracer = ctx.getExtension<lv::RayTracer>();
 
     lv::WindowInfo windowInfo;
-    windowInfo.width = 640;
-    windowInfo.height = 480;
+    windowInfo.width = 1280;
+    windowInfo.height = 768;
     windowInfo.windowName = "Lovely Vulkan";
     lv::Window window(ctx, windowInfo);
+
+    lv::Camera camera{window.glfwWindow};
+
     uint32_t tick = 0;
     while(!window.shouldClose()) {
         double ping = glfwGetTime();
-        window.nextFrame([raytracer, computeShader, rasterizer](lv::FrameContext& frame) {
-            auto compFrame = frame.getExtFrame<lv::ComputeFrame>();
+        window.nextFrame([&](lv::FrameContext& frame) {
             auto imgStore = frame.getExtFrame<lv::ImageStoreFrame>();
-            auto imgStorePrev = frame.fPrev->getExtFrame<lv::ImageStoreFrame>();
             auto rastFrame = frame.getExtFrame<lv::RasterizerFrame>();
 
-            vkCmdBindDescriptorSets(frame.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, computeShader->pipelineLayout, 0, 1, &compFrame.descriptorSets[0], 0, nullptr);
-            vkCmdBindPipeline(frame.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, computeShader->pipeline);
-            float time = static_cast<float>(glfwGetTime());
-            vkCmdPushConstants(frame.commandBuffer, computeShader->pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(float), &time);
-            vkCmdDispatch(frame.commandBuffer, frame.swapchain.width/16, frame.swapchain.height/16, 1);
-            
-
             // Run the raytracer
-            raytracer->render(frame);
+            camera.update();
+            raytracer->render(frame, camera.getViewMatrix());
 
             // Prepare the image to be sampled when rendering to the screen
             auto barrier = vks::initializers::imageMemoryBarrier(
@@ -75,7 +76,7 @@ int main(int argc, char** argv) {
             rasterizer->endPass(frame);
 
 
-            // Prepare the image to be sampled when rendering to the screen
+            // Set the image back for ray tracing
             barrier = vks::initializers::imageMemoryBarrier(
                     imgStore.get(lv::ImageID(1)).image,
                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
