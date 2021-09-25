@@ -40,7 +40,7 @@ struct RayTracerFrame {
 
 
 struct RayTracerInfo {
-    struct Vertex { float pos[3]; };
+    struct Vertex { float pos[4]; };
     std::vector<Vertex> vertexData;
     std::vector<uint32_t> indexData;
 };

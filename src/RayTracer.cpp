@@ -68,8 +68,20 @@ RayTracerFrame* RayTracer::buildFrame(FrameContext& frame) {
     bufferDescriptorInfo.range = VK_WHOLE_SIZE;
     VkWriteDescriptorSet uniformBufferWrite = vks::initializers::writeDescriptorSet(ret->descriptorSet, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2, &bufferDescriptorInfo);
 
+    VkDescriptorBufferInfo indexBufferDescriptorInfo{};
+    indexBufferDescriptorInfo.buffer = indexBuffer.buffer;
+    indexBufferDescriptorInfo.offset = 0;
+    indexBufferDescriptorInfo.range = VK_WHOLE_SIZE;
+    VkWriteDescriptorSet indexBufferWrite = vks::initializers::writeDescriptorSet(ret->descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3, &indexBufferDescriptorInfo);
 
-    std::array<VkWriteDescriptorSet, 3> writes { writeAS, imageWrite, uniformBufferWrite };
+    VkDescriptorBufferInfo vertexBufferDescriptorInfo{};
+    vertexBufferDescriptorInfo.buffer = vertexBuffer.buffer;
+    vertexBufferDescriptorInfo.offset = 0;
+    vertexBufferDescriptorInfo.range = VK_WHOLE_SIZE;
+    VkWriteDescriptorSet vertexBufferWrite = vks::initializers::writeDescriptorSet(ret->descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 4, &vertexBufferDescriptorInfo);
+
+
+    std::array<VkWriteDescriptorSet, 5> writes { writeAS, imageWrite, uniformBufferWrite, indexBufferWrite, vertexBufferWrite };
     vkUpdateDescriptorSets(ctx.vkDevice, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
     return ret;
 }
@@ -135,7 +147,9 @@ void RayTracer::createRayTracingPipeline() {
     auto ASLayoutBinding = vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, VK_SHADER_STAGE_RAYGEN_BIT_KHR, 0);
     auto resultImageLayoutBinding = vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR, 1);
     auto uniformBufferBinding = vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_RAYGEN_BIT_KHR, 2);
-    std::vector<VkDescriptorSetLayoutBinding> bindings { ASLayoutBinding, resultImageLayoutBinding, uniformBufferBinding };
+    auto indexBufferBinding = vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, 3);
+    auto vertexBufferBinding = vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, 4);
+    std::vector<VkDescriptorSetLayoutBinding> bindings { ASLayoutBinding, resultImageLayoutBinding, uniformBufferBinding, indexBufferBinding, vertexBufferBinding };
 
     auto layoutCreateInfo = vks::initializers::descriptorSetLayoutCreateInfo(bindings);
     vkCheck(vkCreateDescriptorSetLayout(ctx.vkDevice, &layoutCreateInfo, nullptr, &descriptorSetLayout));
@@ -191,7 +205,7 @@ void RayTracer::createRayTracingPipeline() {
     rayTracingPipelineCI.pStages = shaderStages.data();
     rayTracingPipelineCI.groupCount = static_cast<uint32_t>(shaderGroups.size());
     rayTracingPipelineCI.pGroups = shaderGroups.data();
-    rayTracingPipelineCI.maxPipelineRayRecursionDepth = 1;
+    rayTracingPipelineCI.maxPipelineRayRecursionDepth = 8;
     rayTracingPipelineCI.layout = pipelineLayout;
     vkCheck(vkCreateRayTracingPipelinesKHR(ctx.vkDevice, VK_NULL_HANDLE, VK_NULL_HANDLE, 1, &rayTracingPipelineCI, nullptr, &pipeline));
 
@@ -210,8 +224,8 @@ void RayTracer::createBottomLevelAccelerationStructure() {
 
 
     const VkBufferUsageFlags bufferUsage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
-    buffertools::createH2D_buffer_data(ctx, bufferUsage, info.vertexData.size() * sizeof(RayTracerInfo::Vertex), info.vertexData.data(), &vertexBuffer);
-    buffertools::createH2D_buffer_data(ctx, bufferUsage, info.indexData.size() * sizeof(uint32_t), info.indexData.data(), &indexBuffer);
+    buffertools::createH2D_buffer_data(ctx, bufferUsage | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, info.vertexData.size() * sizeof(RayTracerInfo::Vertex), info.vertexData.data(), &vertexBuffer);
+    buffertools::createH2D_buffer_data(ctx, bufferUsage | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, info.indexData.size() * sizeof(uint32_t), info.indexData.data(), &indexBuffer);
     buffertools::createH2D_buffer_data(ctx, bufferUsage, sizeof(VkTransformMatrixKHR), &transformMatrix, &transformBuffer);
 
     VkDeviceOrHostAddressConstKHR vertexBufferDeviceAddress{};
@@ -225,7 +239,7 @@ void RayTracer::createBottomLevelAccelerationStructure() {
     // The actual build
     VkAccelerationStructureGeometryTrianglesDataKHR triangleData {
         .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR,
-        .vertexFormat = VK_FORMAT_R32G32B32_SFLOAT,
+        .vertexFormat = VK_FORMAT_R32G32B32A32_SFLOAT,
         .vertexData = vertexBufferDeviceAddress,
         .vertexStride = sizeof(RayTracerInfo::Vertex),
         .maxVertex = 3,
@@ -375,7 +389,7 @@ void RayTracer::createTopLevelAccelerationStructure() {
 void RayTracer::createShaderBindingTable() {
     const uint32_t handleSize = rayTracingPipelineProperties.shaderGroupHandleSize;
     const uint32_t handleSizeAlligned = vks::tools::alignedSize(rayTracingPipelineProperties.shaderGroupHandleSize, rayTracingPipelineProperties.shaderGroupHandleAlignment);
-    const uint32_t groupCount = static_cast<uint32_t>(shaderGroups.size());
+    const auto groupCount = static_cast<uint32_t>(shaderGroups.size());
     const uint32_t sbtSize = groupCount * handleSizeAlligned;
 
     std::vector<uint8_t> shaderHandleStorage(sbtSize);
