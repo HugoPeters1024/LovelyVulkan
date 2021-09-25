@@ -31,6 +31,12 @@ struct app_extensions<RayTracer> {
 struct RayTracerCamera {
     glm::mat4 viewInverse;
     glm::mat4 projInverse;
+    glm::vec3 pad0;
+    float time;
+    glm::vec3 pad1;
+    uint tick;
+    glm::vec3 pad2;
+    bool shouldReset;
 };
 
 struct RayTracerFrame {
@@ -40,7 +46,7 @@ struct RayTracerFrame {
 
 
 struct RayTracerInfo {
-    struct Vertex { float pos[4]; };
+    struct Vertex { float pos[4]; float emission[4]; };
     std::vector<Vertex> vertexData;
     std::vector<uint32_t> indexData;
 };
@@ -53,8 +59,9 @@ public:
 
     RayTracerFrame* buildFrame(FrameContext& frame) override;
     void destroyFrame(RayTracerFrame* frame) override;
+    void render(FrameContext& frame, glm::mat4 viewMatrix);
 
-    void render(FrameContext& frame, glm::mat4 viewMatrix) const;
+    inline void resetAccumulator() { shouldReset = true; }
 
 	PFN_vkGetBufferDeviceAddressKHR vkGetBufferDeviceAddressKHR;
 	PFN_vkCreateAccelerationStructureKHR vkCreateAccelerationStructureKHR;
@@ -101,6 +108,8 @@ private:
 
     AccelerationStructure bottomAC;
     AccelerationStructure topAC;
+
+    bool shouldReset = false;
 };
 
 

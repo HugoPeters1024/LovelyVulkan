@@ -2,11 +2,13 @@
 #extension GL_EXT_ray_tracing : enable
 
 layout(location = 0) rayPayloadInEXT Payload {
-    vec4 normal;
-    vec3 accumulator;
+    vec3 normal;
+    bool hit;
+    vec3 materialColor;
     float d;
-    vec3 mask;
+    vec3 emission;
 } payload;
 
 void main() {
+    payload.hit = false;
 }

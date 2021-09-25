@@ -18,7 +18,12 @@ int main(int argc, char** argv) {
         auto& attrib = reader.GetAttrib();
         auto& shape = reader.GetShapes()[0];
         for(size_t v=0; v<attrib.GetVertices().size(); v+=3) {
-            rayInfo.vertexData.push_back(lv::RayTracerInfo::Vertex { attrib.vertices[v+0], attrib.vertices[v+1], attrib.vertices[v+2]});
+            rayInfo.vertexData.push_back(lv::RayTracerInfo::Vertex { attrib.vertices[v+0], attrib.vertices[v+1], attrib.vertices[v+2], 0, 0, 0, 0, 0});
+            if (v % 700 == 0) {
+                rayInfo.vertexData.back().emission[0] = 25;
+                rayInfo.vertexData.back().emission[1] = 25;
+                rayInfo.vertexData.back().emission[2] = 25;
+            }
         }
         for(const auto& idx : shape.mesh.indices) {
             rayInfo.indexData.push_back(idx.vertex_index);
@@ -56,6 +61,7 @@ int main(int argc, char** argv) {
 
             // Run the raytracer
             camera.update();
+            if (camera.getHasMoved()) raytracer->resetAccumulator();
             raytracer->render(frame, camera.getViewMatrix());
 
             // Prepare the image to be sampled when rendering to the screen

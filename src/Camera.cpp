@@ -9,16 +9,18 @@ Camera::Camera(GLFWwindow* window) : window(window) {
 }
 
 void Camera::update() {
+    hasMoved = false;
+
     const float moveSpeed = 0.02f;
     const float rotSpeed = 0.02f;
     const glm::vec3 viewDir = getViewDir();
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) eye += moveSpeed * viewDir;
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) eye -= moveSpeed * viewDir;
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) { hasMoved = true, eye += moveSpeed * viewDir; }
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) { hasMoved = true, eye -= moveSpeed * viewDir; }
 
-    if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) theta += rotSpeed;
-    if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) theta -= rotSpeed;
-    if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS) phi -= rotSpeed;
-    if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) phi += rotSpeed;
+    if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) { hasMoved = true, theta += rotSpeed; }
+    if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) { hasMoved = true, theta -= rotSpeed; }
+    if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS) { hasMoved = true, phi -= rotSpeed; }
+    if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) { hasMoved = true, phi += rotSpeed; }
 
 }
 

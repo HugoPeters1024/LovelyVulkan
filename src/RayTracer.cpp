@@ -407,15 +407,20 @@ void RayTracer::destroyAccelerationStructure(AccelerationStructure& structure) c
 }
 
 
-void RayTracer::render(FrameContext& frame, glm::mat4 viewMatrix) const {
+void RayTracer::render(FrameContext& frame, glm::mat4 viewMatrix) {
     const uint32_t handleSizeAligned = vks::tools::alignedSize(rayTracingPipelineProperties.shaderGroupHandleSize, rayTracingPipelineProperties.shaderGroupHandleAlignment);
 
     const float aspectRatio = (float)frame.swapchain.width / (float)frame.swapchain.height;
     glm::mat4 projectionMatrix = glm::perspective(45.0f, aspectRatio, 0.1f, 100.0f);
 
+    static uint tick = 0;
+
     RayTracerCamera camera {
         .viewInverse = glm::inverse(viewMatrix),
         .projInverse = glm::inverse(projectionMatrix),
+        .time = static_cast<float>(glfwGetTime()),
+        .tick = tick++,
+        .shouldReset = shouldReset,
     };
 
     auto myFrame = frame.getExtFrame<RayTracerFrame>();
@@ -445,6 +450,8 @@ void RayTracer::render(FrameContext& frame, glm::mat4 viewMatrix) const {
     vkCmdBindPipeline(frame.commandBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipeline);
     vkCmdBindDescriptorSets(frame.commandBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipelineLayout, 0, 1, &frame.getExtFrame<RayTracerFrame>().descriptorSet, 0, 0);
     vkCmdTraceRaysKHR(frame.commandBuffer, &raygenShaderSbtEntry, &missShaderSbtEntry, &hitShaderSbtEntry, &callableShaderSbtEntry, frame.swapchain.width, frame.swapchain.height,1);
+
+    shouldReset = false;
 }
 
 }
