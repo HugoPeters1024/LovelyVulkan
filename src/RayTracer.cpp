@@ -410,7 +410,7 @@ void RayTracer::destroyAccelerationStructure(AccelerationStructure& structure) c
 void RayTracer::render(FrameContext& frame, glm::mat4 viewMatrix) const {
     const uint32_t handleSizeAligned = vks::tools::alignedSize(rayTracingPipelineProperties.shaderGroupHandleSize, rayTracingPipelineProperties.shaderGroupHandleAlignment);
 
-    const float aspectRatio = frame.swapchain.width / frame.swapchain.height;
+    const float aspectRatio = (float)frame.swapchain.width / (float)frame.swapchain.height;
     glm::mat4 projectionMatrix = glm::perspective(45.0f, aspectRatio, 0.1f, 100.0f);
 
     RayTracerCamera camera {

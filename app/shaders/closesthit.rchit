@@ -7,8 +7,9 @@ layout(binding = 4, set = 0) buffer Vertices { vec3 v[]; } vertices;
 
 layout(location = 0) rayPayloadInEXT Payload {
     vec4 normal;
-    vec3 color;
+    vec3 accumulator;
     float d;
+    vec3 mask;
 } payload;
 
 hitAttributeEXT vec3 attribs;
@@ -39,7 +40,7 @@ void main() {
     const vec3 barycentricCoords = vec3(1.0f - attribs.x - -attribs.y, attribs.x, attribs.y);
     //const float r = float(rand_xorshift(gl_PrimitiveID) % 256) / 255.0f;
     //payload.color += hsv2rgb(vec3(r, 1.0f, 0.2f));
-    payload.color += max(0.0f, dot(getNormal(), vec3(0,1,0)));
+    payload.accumulator += payload.mask * 0.5f * max(0.0f, abs(dot(getNormal(), vec3(0,1,0))));
     payload.normal = vec4(getNormal(),1);
     payload.d = gl_RayTmaxEXT;
 }

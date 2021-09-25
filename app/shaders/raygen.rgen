@@ -12,8 +12,9 @@ layout(binding = 2, set = 0) uniform CameraProperties
 layout(location = 0) rayPayloadEXT Payload {
     // 4th component indicates a hit
     vec4 normal;
-    vec3 color;
+    vec3 accumulator;
     float d;
+    vec3 mask;
 } payload;
 
 
@@ -28,20 +29,23 @@ void main() {
 
 
     payload.normal = vec4(0);
-    payload.color = vec3(0.0f);
-    payload.d = 0.0f;
+    payload.accumulator = vec3(0.0f);
+    payload.mask = vec3(1.0f);
 
-    for(int rec=0; rec<1; rec++) {
+    for(int rec=0; rec<8; rec++) {
         float tmin = 0.001f;
         float tmax = 10000.0f;
+        payload.d = 0.0f;
         traceRayEXT(topLevelAS, gl_RayFlagsOpaqueEXT, 0xff, 0, 0, 0, origin, tmin, direction, tmax, 0);
 
         if (payload.d < 0.00001f) break;
 
-        origin = origin + (payload.d - 0.001f) * direction;
-        direction = -reflect(-direction, payload.normal.xyz);
-        origin += 0.001f * direction;
+        if (dot(payload.normal.xyz, direction) > 0) payload.normal.xyz = -payload.normal.xyz;
+
+        origin = origin + payload.d * direction + 0.001f * payload.normal.xyz;
+        direction = reflect(direction, payload.normal.xyz);
+        payload.mask *= vec3(0.89f, 0.95f, 0.90f) * 0.4f;
     }
 
-    imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(payload.color, 0));
+    imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(payload.accumulator, 0));
 }

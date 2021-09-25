@@ -3,8 +3,9 @@
 
 layout(location = 0) rayPayloadInEXT Payload {
     vec4 normal;
-    vec3 color;
+    vec3 accumulator;
     float d;
+    vec3 mask;
 } payload;
 
 void main() {

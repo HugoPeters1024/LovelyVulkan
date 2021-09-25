@@ -10,7 +10,7 @@ Camera::Camera(GLFWwindow* window) : window(window) {
 
 void Camera::update() {
     const float moveSpeed = 0.02f;
-    const float rotSpeed = 0.01f;
+    const float rotSpeed = 0.02f;
     const glm::vec3 viewDir = getViewDir();
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) eye += moveSpeed * viewDir;
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) eye -= moveSpeed * viewDir;
