@@ -29,14 +29,13 @@ struct app_extensions<RayTracer> {
 };
 
 struct RayTracerCamera {
-    glm::mat4 viewInverse;
-    glm::mat4 projInverse;
-    glm::vec3 pad0;
-    float time;
-    glm::vec3 pad1;
-    uint tick;
-    glm::vec3 pad2;
-    bool shouldReset;
+    alignas(16) glm::mat4 viewInverse;
+    alignas(16) glm::mat4 projInverse;
+    alignas(16) glm::vec4 properties0;
+
+    inline void setTime(float time) { properties0[0] = time; }
+    inline void setTick(uint32_t tick) { properties0[1] = reinterpret_cast<float&>(tick); }
+    inline void setShouldReset(bool shouldReset) { properties0.z = shouldReset ? 1.0f : 0.0f; }
 };
 
 struct RayTracerFrame {

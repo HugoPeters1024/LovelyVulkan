@@ -14,8 +14,11 @@ void Camera::update() {
     const float moveSpeed = 0.02f;
     const float rotSpeed = 0.02f;
     const glm::vec3 viewDir = getViewDir();
+    const glm::vec3 sideDir = cross(glm::vec3(0,1,0), viewDir);
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) { hasMoved = true, eye += moveSpeed * viewDir; }
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) { hasMoved = true, eye -= moveSpeed * viewDir; }
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) { hasMoved = true, eye += moveSpeed * sideDir; }
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) { hasMoved = true, eye -= moveSpeed * sideDir; }
 
     if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) { hasMoved = true, theta += rotSpeed; }
     if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) { hasMoved = true, theta -= rotSpeed; }

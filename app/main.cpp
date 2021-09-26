@@ -7,7 +7,7 @@ int main(int argc, char** argv) {
     lv::AppContextInfo info;
 
     lv::ImageStoreInfo imageStoreInfo;
-    imageStoreInfo.defineImage(lv::ImageID(1), VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_LAYOUT_GENERAL);
+    imageStoreInfo.defineStaticImage(lv::ImageID(1), VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_LAYOUT_GENERAL);
     info.registerExtension<lv::ImageStore>(imageStoreInfo);
 
 
@@ -19,7 +19,7 @@ int main(int argc, char** argv) {
         auto& shape = reader.GetShapes()[0];
         for(size_t v=0; v<attrib.GetVertices().size(); v+=3) {
             rayInfo.vertexData.push_back(lv::RayTracerInfo::Vertex { attrib.vertices[v+0], attrib.vertices[v+1], attrib.vertices[v+2], 0, 0, 0, 0, 0});
-            if (v % 700 == 0) {
+            if (v % 100 == 0) {
                 rayInfo.vertexData.back().emission[0] = 25;
                 rayInfo.vertexData.back().emission[1] = 25;
                 rayInfo.vertexData.back().emission[2] = 25;
@@ -34,7 +34,7 @@ int main(int argc, char** argv) {
 
     lv::RasterizerInfo rastInfo("app/shaders_bin/quad.vert.spv", "app/shaders_bin/quad.frag.spv");
     rastInfo.defineAttachment(0, [](lv::FrameContext& frame) { return frame.swapchain.vkView; });
-    rastInfo.defineTexture(0, [](lv::FrameContext& frame) { return frame.getExtFrame<lv::ImageStoreFrame>().get(lv::ImageID(1)).view; });
+    rastInfo.defineTexture(0, [](lv::FrameContext& frame) { return frame.getExtFrame<lv::ImageStoreFrame>().getStatic(lv::ImageID(1))->view; });
     info.registerExtension<lv::Rasterizer>(rastInfo);
 
 
@@ -66,7 +66,7 @@ int main(int argc, char** argv) {
 
             // Prepare the image to be sampled when rendering to the screen
             auto barrier = vks::initializers::imageMemoryBarrier(
-                    imgStore.get(lv::ImageID(1)).image,
+                    imgStore.getStatic(lv::ImageID(1))->image,
                     VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
             vkCmdPipelineBarrier(
                     frame.commandBuffer,
@@ -84,7 +84,7 @@ int main(int argc, char** argv) {
 
             // Set the image back for ray tracing
             barrier = vks::initializers::imageMemoryBarrier(
-                    imgStore.get(lv::ImageID(1)).image,
+                    imgStore.getStatic(lv::ImageID(1))->image,
                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
             vkCmdPipelineBarrier(
                     frame.commandBuffer,

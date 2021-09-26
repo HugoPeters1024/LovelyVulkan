@@ -4,18 +4,17 @@
 #include "math.glsl"
 
 layout(binding = 0, set = 0) uniform accelerationStructureEXT topLevelAS;
-layout(binding = 1, set = 0, rgba8) uniform image2D image;
+layout(binding = 1, set = 0, rgba32f) uniform image2D image;
 layout(binding = 2, set = 0) uniform CameraProperties
 {
     mat4 viewInverse;
     mat4 projInverse;
-    vec3 pad0;
-    float time;
-    vec3 pad1;
-    uint tick;
-    vec3 pad2;
-    bool shouldReset;
+    vec4 properties0;
 } cam;
+
+float getTime() { return cam.properties0.x; }
+uint getTick() { return floatBitsToUint(cam.properties0.y); }
+bool getShouldReset() { return cam.properties0.z > 0.001f; }
 
 layout(location = 0) rayPayloadEXT Payload {
     vec3 normal;
@@ -34,12 +33,11 @@ void initPayload() {
 }
 
 uint getSeed() {
-    return wang_hash(wang_hash(gl_LaunchIDEXT.x + 1280u * gl_LaunchIDEXT.y) + cam.tick);
+    return wang_hash(wang_hash(gl_LaunchIDEXT.x + gl_LaunchSizeEXT.x * gl_LaunchIDEXT.y) + getTick());
 }
 
-
-void main() {
-    const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5f);
+vec3 getSample(inout uint seed) {
+    const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy);
     const vec2 inUV = pixelCenter / vec2(gl_LaunchSizeEXT.xy);
     vec2 d = inUV * 2.0f - 1.0f;
 
@@ -51,9 +49,8 @@ void main() {
 
     vec3 accucolor = vec3(0);
     vec3 mask = vec3(1);
-    uint seed = getSeed();
 
-    for(int rec=0; rec<3; rec++) {
+    for(int rec=0; rec<16; rec++) {
         float tmin = 0.001f;
         float tmax = 1000.0f;
         traceRayEXT(topLevelAS, gl_RayFlagsOpaqueEXT, 0xff, 0, 0, 0, origin, tmin, direction, tmax, 0);
@@ -68,7 +65,16 @@ void main() {
 
         origin = origin + payload.d * direction + 0.001f * payload.normal;
         direction = SampleHemisphereCosine(payload.normal, seed);
-        mask *= max(0.0f, dot(payload.normal, direction));
+        mask *= payload.materialColor;
+
+        // Russian roulette
+        float russianP = clamp(max3(payload.materialColor), 0.1f, 0.9f);
+        if (max3(mask) > 0.001f && rand(seed) < russianP) {
+            mask /= russianP;
+        } else {
+            break;
+        }
+
 
 
         // Trace the shadow ray
@@ -90,7 +96,17 @@ void main() {
         //direction = reflect(direction, payload.normal);
     }
 
-    vec4 oldColor = imageLoad(image, ivec2(gl_LaunchIDEXT.xy));
-    if (cam.shouldReset) oldColor = vec4(0);
-    imageStore(image, ivec2(gl_LaunchIDEXT.xy), oldColor + vec4(accucolor, 1));
+    return accucolor;
+}
+
+
+void main() {
+    uint seed = getSeed();
+    vec3 s = vec3(0);
+
+    for(int i=0; i<12; i++)
+        s += getSample(seed);
+    s /= 12.0f;
+    vec4 oldColor = getShouldReset() ? vec4(0) : imageLoad(image, ivec2(gl_LaunchIDEXT.xy));
+    imageStore(image, ivec2(gl_LaunchIDEXT.xy), oldColor + vec4(s, 1));
 }

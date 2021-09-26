@@ -58,7 +58,7 @@ RayTracerFrame* RayTracer::buildFrame(FrameContext& frame) {
     writeAS.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
 
     VkDescriptorImageInfo imageDescriptorInfo{};
-    imageDescriptorInfo.imageView = frame.getExtFrame<lv::ImageStoreFrame>().get(lv::ImageID(1)).view;
+    imageDescriptorInfo.imageView = frame.getExtFrame<lv::ImageStoreFrame>().getStatic(lv::ImageID(1))->view;
     imageDescriptorInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
     auto imageWrite = vks::initializers::writeDescriptorSet(ret->descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, &imageDescriptorInfo);
 
@@ -205,7 +205,7 @@ void RayTracer::createRayTracingPipeline() {
     rayTracingPipelineCI.pStages = shaderStages.data();
     rayTracingPipelineCI.groupCount = static_cast<uint32_t>(shaderGroups.size());
     rayTracingPipelineCI.pGroups = shaderGroups.data();
-    rayTracingPipelineCI.maxPipelineRayRecursionDepth = 8;
+    rayTracingPipelineCI.maxPipelineRayRecursionDepth = 16;
     rayTracingPipelineCI.layout = pipelineLayout;
     vkCheck(vkCreateRayTracingPipelinesKHR(ctx.vkDevice, VK_NULL_HANDLE, VK_NULL_HANDLE, 1, &rayTracingPipelineCI, nullptr, &pipeline));
 
@@ -418,16 +418,18 @@ void RayTracer::render(FrameContext& frame, glm::mat4 viewMatrix) {
     RayTracerCamera camera {
         .viewInverse = glm::inverse(viewMatrix),
         .projInverse = glm::inverse(projectionMatrix),
-        .time = static_cast<float>(glfwGetTime()),
-        .tick = tick++,
-        .shouldReset = shouldReset,
     };
+
+    camera.setTime(static_cast<float>(glfwGetTime()));
+    camera.setTick(tick++);
+    camera.setShouldReset(shouldReset);
 
     auto myFrame = frame.getExtFrame<RayTracerFrame>();
     void* data;
     vkCheck(vmaMapMemory(ctx.vmaAllocator, myFrame.cameraBuffer.memory, &data));
     memcpy(data, &camera, sizeof(RayTracerCamera));
     vmaUnmapMemory(ctx.vmaAllocator, myFrame.cameraBuffer.memory);
+    vmaFlushAllocation(ctx.vmaAllocator, myFrame.cameraBuffer.memory, 0, sizeof(RayTracerCamera));
 
 
     VkStridedDeviceAddressRegionKHR raygenShaderSbtEntry{};

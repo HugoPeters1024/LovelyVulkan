@@ -1,6 +1,7 @@
 #version 460
 #extension GL_EXT_ray_tracing : enable
 #extension GL_EXT_nonuniform_qualifier : enable
+#include "math.glsl"
 
 struct Vertex {
     vec4 pos;
@@ -44,9 +45,9 @@ vec3 hsv2rgb(vec3 c) {
 
 void main() {
     const vec3 barycentricCoords = vec3(1.0f - attribs.x - attribs.y, attribs.x, attribs.y);
-    payload.emission = getEmission();
-    payload.materialColor = payload.emission;
-    //payload.materialColor = vec3(0.5f * max(0.0f, abs(dot(getNormal(), vec3(0,1,0)))));
+    uint seed = gl_PrimitiveID;
+    payload.emission = gl_PrimitiveID % 100 == 0 ? hsv2rgb(vec3(rand(seed), 1, 1)) : vec3(0);
+    payload.materialColor = vec3(0.8f);
     payload.normal = getNormal();
     payload.d = gl_RayTmaxEXT;
     payload.hit = true;
