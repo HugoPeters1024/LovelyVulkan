@@ -53,16 +53,23 @@ int main(int argc, char** argv) {
     lv::Camera camera{window.glfwWindow};
 
     uint32_t tick = 0;
+    double ping = glfwGetTime();
     while(!window.shouldClose()) {
-        double ping = glfwGetTime();
+        float dt = glfwGetTime() - ping;
+        ping = glfwGetTime();
+
+        if (tick++ % 100 == 0) {
+            logger::debug("fps: {}", 1.0f / dt);
+        }
+
         window.nextFrame([&](lv::FrameContext& frame) {
             auto imgStore = frame.getExtFrame<lv::ImageStoreFrame>();
             auto rastFrame = frame.getExtFrame<lv::RasterizerFrame>();
 
             // Run the raytracer
-            camera.update();
+            camera.update(dt);
             if (camera.getHasMoved()) raytracer->resetAccumulator();
-            raytracer->render(frame, camera.getViewMatrix());
+            raytracer->render(frame, camera);
 
             // Prepare the image to be sampled when rendering to the screen
             auto barrier = vks::initializers::imageMemoryBarrier(
@@ -97,9 +104,6 @@ int main(int argc, char** argv) {
 
         });
 
-        if (tick++ % 100 == 0) {
-            logger::debug("fps: {}", 1.0f / (glfwGetTime()-ping));
-        }
     }
 
     logger::info("Goodbye!");

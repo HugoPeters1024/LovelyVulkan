@@ -8,11 +8,11 @@ Camera::Camera(GLFWwindow* window) : window(window) {
     theta = glm::pi<float>() / 2.0f;
 }
 
-void Camera::update() {
+void Camera::update(float dt) {
     hasMoved = false;
 
-    const float moveSpeed = 0.02f;
-    const float rotSpeed = 0.02f;
+    const float moveSpeed = 3.0f * dt;
+    const float rotSpeed = 3.0f * dt;
     const glm::vec3 viewDir = getViewDir();
     const glm::vec3 sideDir = cross(glm::vec3(0,1,0), viewDir);
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) { hasMoved = true, eye += moveSpeed * viewDir; }

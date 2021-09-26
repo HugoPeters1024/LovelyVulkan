@@ -9,12 +9,14 @@ layout(binding = 2, set = 0) uniform CameraProperties
 {
     mat4 viewInverse;
     mat4 projInverse;
+    vec4 viewDir;
     vec4 properties0;
 } cam;
 
 float getTime() { return cam.properties0.x; }
 uint getTick() { return floatBitsToUint(cam.properties0.y); }
 bool getShouldReset() { return cam.properties0.z > 0.001f; }
+
 
 layout(location = 0) rayPayloadEXT Payload {
     vec3 normal;
@@ -37,7 +39,7 @@ uint getSeed() {
 }
 
 vec3 getSample(inout uint seed) {
-    const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy);
+    const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(rand(seed), rand(seed));
     const vec2 inUV = pixelCenter / vec2(gl_LaunchSizeEXT.xy);
     vec2 d = inUV * 2.0f - 1.0f;
 
@@ -104,9 +106,9 @@ void main() {
     uint seed = getSeed();
     vec3 s = vec3(0);
 
-    for(int i=0; i<12; i++)
+    for(int i=0; i<5; i++)
         s += getSample(seed);
-    s /= 12.0f;
+    s /= 5.0f;
     vec4 oldColor = getShouldReset() ? vec4(0) : imageLoad(image, ivec2(gl_LaunchIDEXT.xy));
     imageStore(image, ivec2(gl_LaunchIDEXT.xy), oldColor + vec4(s, 1));
 }

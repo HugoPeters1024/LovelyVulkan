@@ -3,6 +3,8 @@
 #include "AppContext.h"
 #include "AppExt.h"
 #include "BufferTools.h"
+#include "ImageStore.h"
+#include "Camera.h"
 
 namespace lv {
 
@@ -31,6 +33,7 @@ struct app_extensions<RayTracer> {
 struct RayTracerCamera {
     alignas(16) glm::mat4 viewInverse;
     alignas(16) glm::mat4 projInverse;
+    alignas(16) glm::vec4 viewDir;
     alignas(16) glm::vec4 properties0;
 
     inline void setTime(float time) { properties0[0] = time; }
@@ -58,7 +61,7 @@ public:
 
     RayTracerFrame* buildFrame(FrameContext& frame) override;
     void destroyFrame(RayTracerFrame* frame) override;
-    void render(FrameContext& frame, glm::mat4 viewMatrix);
+    void render(FrameContext& frame, const Camera& camera);
 
     inline void resetAccumulator() { shouldReset = true; }
 

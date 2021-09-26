@@ -15,6 +15,10 @@ ImageStore::ImageStore(AppContext& ctx, ImageStoreInfo info)
 }
 
 ImageStore::~ImageStore() {
+    for(const auto& pair : staticImages) {
+        vkDestroyImageView(ctx.vkDevice, pair.second.view, nullptr);
+        vmaDestroyImage(ctx.vmaAllocator, pair.second.image, pair.second.allocation);
+    }
 }
 
 ImageStoreFrame* ImageStore::buildFrame(FrameContext& frame) {

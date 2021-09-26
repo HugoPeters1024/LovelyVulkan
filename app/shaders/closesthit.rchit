@@ -31,9 +31,10 @@ vec3 getNormal() {
 
 vec3 getEmission() {
     vec3 e0 = vertices.v[indices.i[gl_PrimitiveID * 3 + 0]].emission.xyz;
-    vec3 e1 = vertices.v[indices.i[gl_PrimitiveID * 3 + 1]].emission.xyz;
-    vec3 e2 = vertices.v[indices.i[gl_PrimitiveID * 3 + 2]].emission.xyz;
-    return (1.0f - attribs.x - attribs.y) * e0 + attribs.x * e1 + attribs.y * e2;
+    return e0;
+    //vec3 e1 = vertices.v[indices.i[gl_PrimitiveID * 3 + 1]].emission.xyz;
+    //vec3 e2 = vertices.v[indices.i[gl_PrimitiveID * 3 + 2]].emission.xyz;
+    //return (1.0f - attribs.x - attribs.y) * e0 + attribs.x * e1 + attribs.y * e2;
 }
 
 vec3 hsv2rgb(vec3 c) {
@@ -45,9 +46,9 @@ vec3 hsv2rgb(vec3 c) {
 
 void main() {
     const vec3 barycentricCoords = vec3(1.0f - attribs.x - attribs.y, attribs.x, attribs.y);
-    uint seed = gl_PrimitiveID;
-    payload.emission = gl_PrimitiveID % 100 == 0 ? hsv2rgb(vec3(rand(seed), 1, 1)) : vec3(0);
-    payload.materialColor = vec3(0.8f);
+    uint seed = gl_PrimitiveID * 17;
+    payload.emission = gl_PrimitiveID % 50 == 0 ? 5 * hsv2rgb(vec3(rand(seed), 1, 1)) : vec3(0);
+    payload.materialColor = vec3(0.3f);
     payload.normal = getNormal();
     payload.d = gl_RayTmaxEXT;
     payload.hit = true;

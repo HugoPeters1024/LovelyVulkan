@@ -1,5 +1,4 @@
 #include "RayTracer.h"
-#include "ImageStore.h"
 
 namespace lv {
 
@@ -39,7 +38,7 @@ RayTracerFrame* RayTracer::buildFrame(FrameContext& frame) {
         .projInverse = glm::inverse(projectionMatrix),
     };
 
-    buffertools::createH2D_buffer_data(ctx, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, sizeof(RayTracerCamera), &camera, &ret->cameraBuffer);
+    buffertools::create_buffer_H2D_data(ctx, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, sizeof(RayTracerCamera), &camera, &ret->cameraBuffer);
 
     auto allocInfo = vks::initializers::descriptorSetAllocateInfo(ctx.vkDescriptorPool, &descriptorSetLayout, 1);
     vkCheck(vkAllocateDescriptorSets(ctx.vkDevice, &allocInfo, &ret->descriptorSet));
@@ -108,7 +107,7 @@ Buffer RayTracer::createScratchBuffer(VkDeviceSize size) {
     Buffer scratchBuffer{};
     VkBufferUsageFlags usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 
-    buffertools::createH2D_buffer(ctx, usage, size, &scratchBuffer);
+    buffertools::create_buffer_D(ctx, usage, size, &scratchBuffer);
     return scratchBuffer;
 }
 
@@ -116,7 +115,7 @@ AccelerationStructure RayTracer::createAccelerationStructureBuffer(VkAcceleratio
     VkBufferUsageFlags usage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     AccelerationStructure ret{};
 
-    buffertools::createH2D_buffer(ctx, usage, buildSizeInfo.accelerationStructureSize, &ret);
+    buffertools::create_buffer_D(ctx, usage, buildSizeInfo.accelerationStructureSize, &ret);
     ret.deviceAddress = getBufferDeviceAddress(ret.buffer);
     return ret;
 }
@@ -224,9 +223,9 @@ void RayTracer::createBottomLevelAccelerationStructure() {
 
 
     const VkBufferUsageFlags bufferUsage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
-    buffertools::createH2D_buffer_data(ctx, bufferUsage | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, info.vertexData.size() * sizeof(RayTracerInfo::Vertex), info.vertexData.data(), &vertexBuffer);
-    buffertools::createH2D_buffer_data(ctx, bufferUsage | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, info.indexData.size() * sizeof(uint32_t), info.indexData.data(), &indexBuffer);
-    buffertools::createH2D_buffer_data(ctx, bufferUsage, sizeof(VkTransformMatrixKHR), &transformMatrix, &transformBuffer);
+    buffertools::create_buffer_D_data(ctx, bufferUsage | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, info.vertexData.size() * sizeof(RayTracerInfo::Vertex), info.vertexData.data(), &vertexBuffer);
+    buffertools::create_buffer_D_data(ctx, bufferUsage | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, info.indexData.size() * sizeof(uint32_t), info.indexData.data(), &indexBuffer);
+    buffertools::create_buffer_D_data(ctx, bufferUsage, sizeof(VkTransformMatrixKHR), &transformMatrix, &transformBuffer);
 
     VkDeviceOrHostAddressConstKHR vertexBufferDeviceAddress{};
     VkDeviceOrHostAddressConstKHR indexBufferDeviceAddress{};
@@ -318,7 +317,7 @@ void RayTracer::createTopLevelAccelerationStructure() {
 
     Buffer instanceBuffer;
     const VkBufferUsageFlags usage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT_KHR | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
-    buffertools::createH2D_buffer_data(ctx, usage, sizeof(VkAccelerationStructureInstanceKHR), &instance, &instanceBuffer);
+    buffertools::create_buffer_D_data(ctx, usage, sizeof(VkAccelerationStructureInstanceKHR), &instance, &instanceBuffer);
 
     VkDeviceOrHostAddressConstKHR instanceDataDeviceAddress{};
     instanceDataDeviceAddress.deviceAddress = getBufferDeviceAddress(instanceBuffer.buffer);
@@ -396,9 +395,9 @@ void RayTracer::createShaderBindingTable() {
     vkCheck(vkGetRayTracingShaderGroupHandlesKHR(ctx.vkDevice, pipeline, 0, groupCount, sbtSize, shaderHandleStorage.data()));
 
     const VkBufferUsageFlags bufferUsageFlags = VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-    buffertools::createH2D_buffer_data(ctx, bufferUsageFlags, handleSize, shaderHandleStorage.data() + handleSizeAlligned * 0, &raygenShaderBindingTable);
-    buffertools::createH2D_buffer_data(ctx, bufferUsageFlags, handleSize, shaderHandleStorage.data() + handleSizeAlligned * 1, &missShaderBindingTable);
-    buffertools::createH2D_buffer_data(ctx, bufferUsageFlags, handleSize, shaderHandleStorage.data() + handleSizeAlligned * 2, &hitShaderBindingTable);
+    buffertools::create_buffer_D_data(ctx, bufferUsageFlags, handleSize, shaderHandleStorage.data() + handleSizeAlligned * 0, &raygenShaderBindingTable);
+    buffertools::create_buffer_D_data(ctx, bufferUsageFlags, handleSize, shaderHandleStorage.data() + handleSizeAlligned * 1, &missShaderBindingTable);
+    buffertools::create_buffer_D_data(ctx, bufferUsageFlags, handleSize, shaderHandleStorage.data() + handleSizeAlligned * 2, &hitShaderBindingTable);
 }
 
 void RayTracer::destroyAccelerationStructure(AccelerationStructure& structure) const {
@@ -407,7 +406,7 @@ void RayTracer::destroyAccelerationStructure(AccelerationStructure& structure) c
 }
 
 
-void RayTracer::render(FrameContext& frame, glm::mat4 viewMatrix) {
+void RayTracer::render(FrameContext& frame, const Camera& camera) {
     const uint32_t handleSizeAligned = vks::tools::alignedSize(rayTracingPipelineProperties.shaderGroupHandleSize, rayTracingPipelineProperties.shaderGroupHandleAlignment);
 
     const float aspectRatio = (float)frame.swapchain.width / (float)frame.swapchain.height;
@@ -415,19 +414,20 @@ void RayTracer::render(FrameContext& frame, glm::mat4 viewMatrix) {
 
     static uint tick = 0;
 
-    RayTracerCamera camera {
-        .viewInverse = glm::inverse(viewMatrix),
+    RayTracerCamera cameraInfo {
+        .viewInverse = glm::inverse(camera.getViewMatrix()),
         .projInverse = glm::inverse(projectionMatrix),
+        .viewDir = glm::vec4(camera.getViewDir(), 0),
     };
 
-    camera.setTime(static_cast<float>(glfwGetTime()));
-    camera.setTick(tick++);
-    camera.setShouldReset(shouldReset);
+    cameraInfo.setTime(static_cast<float>(glfwGetTime()));
+    cameraInfo.setTick(tick++);
+    cameraInfo.setShouldReset(shouldReset);
 
     auto myFrame = frame.getExtFrame<RayTracerFrame>();
     void* data;
     vkCheck(vmaMapMemory(ctx.vmaAllocator, myFrame.cameraBuffer.memory, &data));
-    memcpy(data, &camera, sizeof(RayTracerCamera));
+    memcpy(data, &cameraInfo, sizeof(RayTracerCamera));
     vmaUnmapMemory(ctx.vmaAllocator, myFrame.cameraBuffer.memory);
     vmaFlushAllocation(ctx.vmaAllocator, myFrame.cameraBuffer.memory, 0, sizeof(RayTracerCamera));
 
