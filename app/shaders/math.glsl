@@ -22,11 +22,8 @@ float rand(inout uint seed)
     return seed * 2.3283064365387e-10f;
 }
 
-
-vec3 SampleHemisphereCosine(in vec3 normal, inout uint seed)
+vec3 SampleHemisphereCosine(in vec3 normal, in float u1, in float u2)
 {
-    const float u1 = rand(seed);
-    const float u2 = rand(seed);
     const float r = sqrt(1.0f - u1 * u1);
     const float phi = 2.0f * 3.14159265358979f * u2;
     const vec3 s = vec3(cos(phi)*r, sin(phi)*r, u1);
@@ -40,6 +37,15 @@ vec3 SampleHemisphereCosine(in vec3 normal, inout uint seed)
             dot(s, vec3(u.y, v.y, w.y)),
             dot(s, vec3(u.z, v.z, w.z))));
 }
+
+
+vec3 SampleHemisphereCosine(in vec3 normal, inout uint seed)
+{
+    const float u1 = rand(seed);
+    const float u2 = rand(seed);
+    return SampleHemisphereCosine(normal, u1, u2);
+}
+
 
 
 float max3(in vec3 v) { return max(v.x, max(v.y, v.z)); }

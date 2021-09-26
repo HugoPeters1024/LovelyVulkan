@@ -1,6 +1,7 @@
 #pragma once
 #include "precomp.h"
 #include "AppContext.h"
+#include "ImageTools.h"
 
 namespace lv {
 
@@ -12,12 +13,6 @@ struct ImageInfo {
     VkImageLayout initialLayout;
 };
 
-struct Image {
-    VkFormat format;
-    VkImage image;
-    VmaAllocation allocation;
-    VkImageView view;
-};
 
 struct ImageStoreInfo {
     std::unordered_map<ImageID, ImageInfo> m_imageInfos;

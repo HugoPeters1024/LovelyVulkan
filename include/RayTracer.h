@@ -4,6 +4,7 @@
 #include "AppExt.h"
 #include "BufferTools.h"
 #include "ImageStore.h"
+#include "ImageTools.h"
 #include "Camera.h"
 
 namespace lv {
@@ -44,6 +45,7 @@ struct RayTracerCamera {
 struct RayTracerFrame {
     VkDescriptorSet descriptorSet;
     Buffer cameraBuffer;
+    VkSampler blueNoiseSampler;
 };
 
 
@@ -63,7 +65,7 @@ public:
     void destroyFrame(RayTracerFrame* frame) override;
     void render(FrameContext& frame, const Camera& camera);
 
-    inline void resetAccumulator() { shouldReset = true; }
+    inline void resetAccumulator() { shouldReset = true; tick = 0; }
 
 	PFN_vkGetBufferDeviceAddressKHR vkGetBufferDeviceAddressKHR;
 	PFN_vkCreateAccelerationStructureKHR vkCreateAccelerationStructureKHR;
@@ -111,7 +113,10 @@ private:
     AccelerationStructure bottomAC;
     AccelerationStructure topAC;
 
+    Image blueNoise;
+
     bool shouldReset = false;
+    uint32_t tick = 0;
 };
 
 

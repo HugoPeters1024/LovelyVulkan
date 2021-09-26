@@ -9,9 +9,11 @@ RayTracer::RayTracer(AppContext& ctx, RayTracerInfo info) : AppExt<RayTracerFram
     createShaderBindingTable();
     createBottomLevelAccelerationStructure();
     createTopLevelAccelerationStructure();
+    imagetools::load_image_D(ctx, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, "./app/bluenoise.png", &blueNoise);
 }
 
 RayTracer::~RayTracer() {
+    imagetools::destroyImage(ctx, blueNoise);
     buffertools::destroyBuffer(ctx, vertexBuffer);
     buffertools::destroyBuffer(ctx, indexBuffer);
     buffertools::destroyBuffer(ctx, transformBuffer);
@@ -21,6 +23,7 @@ RayTracer::~RayTracer() {
     destroyAccelerationStructure(topAC);
     destroyAccelerationStructure(bottomAC);
 
+
     vkDestroyPipeline(ctx.vkDevice, pipeline, nullptr);
     vkDestroyPipelineLayout(ctx.vkDevice, pipelineLayout, nullptr);
     vkDestroyDescriptorSetLayout(ctx.vkDevice, descriptorSetLayout, nullptr);
@@ -29,6 +32,7 @@ RayTracer::~RayTracer() {
 RayTracerFrame* RayTracer::buildFrame(FrameContext& frame) {
     auto ret = new RayTracerFrame();
 
+    // Camera uniform buffer
     glm::mat4 viewMatrix(1.0f);
     const float aspectRatio = frame.swapchain.width / frame.swapchain.height;
     glm::mat4 projectionMatrix = glm::perspective(45.0f, aspectRatio, 0.1f, 100.0f);
@@ -39,6 +43,11 @@ RayTracerFrame* RayTracer::buildFrame(FrameContext& frame) {
     };
 
     buffertools::create_buffer_H2D_data(ctx, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, sizeof(RayTracerCamera), &camera, &ret->cameraBuffer);
+
+    // Blue noise sampler
+    auto samplerInfo = vks::initializers::samplerCreateInfo(1.0f);
+    vkCheck(vkCreateSampler(frame.ctx.vkDevice, &samplerInfo, nullptr, &ret->blueNoiseSampler));
+
 
     auto allocInfo = vks::initializers::descriptorSetAllocateInfo(ctx.vkDescriptorPool, &descriptorSetLayout, 1);
     vkCheck(vkAllocateDescriptorSets(ctx.vkDevice, &allocInfo, &ret->descriptorSet));
@@ -73,20 +82,27 @@ RayTracerFrame* RayTracer::buildFrame(FrameContext& frame) {
     indexBufferDescriptorInfo.range = VK_WHOLE_SIZE;
     VkWriteDescriptorSet indexBufferWrite = vks::initializers::writeDescriptorSet(ret->descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3, &indexBufferDescriptorInfo);
 
-    VkDescriptorBufferInfo vertexBufferDescriptorInfo{};
+    VkDescriptorBufferInfo vertexBufferDescriptorInfo{};;
     vertexBufferDescriptorInfo.buffer = vertexBuffer.buffer;
     vertexBufferDescriptorInfo.offset = 0;
     vertexBufferDescriptorInfo.range = VK_WHOLE_SIZE;
     VkWriteDescriptorSet vertexBufferWrite = vks::initializers::writeDescriptorSet(ret->descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 4, &vertexBufferDescriptorInfo);
 
+    VkDescriptorImageInfo blueNoiseDescriptorInfo{};
+    blueNoiseDescriptorInfo.imageView = blueNoise.view;
+    blueNoiseDescriptorInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    blueNoiseDescriptorInfo.sampler = ret->blueNoiseSampler;
+    VkWriteDescriptorSet blueNoiseWrite = vks::initializers::writeDescriptorSet(ret->descriptorSet, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 8, &blueNoiseDescriptorInfo);
 
-    std::array<VkWriteDescriptorSet, 5> writes { writeAS, imageWrite, uniformBufferWrite, indexBufferWrite, vertexBufferWrite };
+
+    std::array<VkWriteDescriptorSet, 6> writes { writeAS, imageWrite, uniformBufferWrite, indexBufferWrite, vertexBufferWrite, blueNoiseWrite };
     vkUpdateDescriptorSets(ctx.vkDevice, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
     return ret;
 }
 
 void RayTracer::destroyFrame(RayTracerFrame* frame) {
     buffertools::destroyBuffer(ctx, frame->cameraBuffer);
+    vkDestroySampler(ctx.vkDevice, frame->blueNoiseSampler, nullptr);
 }
 
 void RayTracer::loadFunctions() {
@@ -148,7 +164,8 @@ void RayTracer::createRayTracingPipeline() {
     auto uniformBufferBinding = vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_RAYGEN_BIT_KHR, 2);
     auto indexBufferBinding = vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, 3);
     auto vertexBufferBinding = vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, 4);
-    std::vector<VkDescriptorSetLayoutBinding> bindings { ASLayoutBinding, resultImageLayoutBinding, uniformBufferBinding, indexBufferBinding, vertexBufferBinding };
+    auto blueNoiseBinding = vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_RAYGEN_BIT_KHR, 8);
+    std::vector<VkDescriptorSetLayoutBinding> bindings { ASLayoutBinding, resultImageLayoutBinding, uniformBufferBinding, indexBufferBinding, vertexBufferBinding, blueNoiseBinding };
 
     auto layoutCreateInfo = vks::initializers::descriptorSetLayoutCreateInfo(bindings);
     vkCheck(vkCreateDescriptorSetLayout(ctx.vkDevice, &layoutCreateInfo, nullptr, &descriptorSetLayout));
@@ -246,6 +263,7 @@ void RayTracer::createBottomLevelAccelerationStructure() {
         .indexData = indexBufferDeviceAddress,
         .transformData = transformBufferDeviceAddress,
     };
+    
 
     VkAccelerationStructureGeometryKHR accelerationStructureGeometry{};
     accelerationStructureGeometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
@@ -412,7 +430,6 @@ void RayTracer::render(FrameContext& frame, const Camera& camera) {
     const float aspectRatio = (float)frame.swapchain.width / (float)frame.swapchain.height;
     glm::mat4 projectionMatrix = glm::perspective(45.0f, aspectRatio, 0.1f, 100.0f);
 
-    static uint tick = 0;
 
     RayTracerCamera cameraInfo {
         .viewInverse = glm::inverse(camera.getViewMatrix()),

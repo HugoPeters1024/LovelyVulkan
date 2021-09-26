@@ -53,6 +53,9 @@ namespace logger = spdlog;
 // TINY OBJ LOADER
 #include <tiny_obj_loader.h>
 
+// STB IMAGE
+#include <stb_image.h>
+
 // UTILS
 namespace lv {
     class NoCopy {
