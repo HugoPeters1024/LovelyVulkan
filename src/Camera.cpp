@@ -20,8 +20,8 @@ void Camera::update(float dt) {
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) { hasMoved = true, eye += moveSpeed * sideDir; }
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) { hasMoved = true, eye -= moveSpeed * sideDir; }
 
-    if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) { hasMoved = true, theta += rotSpeed; }
-    if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) { hasMoved = true, theta -= rotSpeed; }
+    if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) { hasMoved = true, theta -= rotSpeed; }
+    if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) { hasMoved = true, theta += rotSpeed; }
     if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS) { hasMoved = true, phi -= rotSpeed; }
     if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) { hasMoved = true, phi += rotSpeed; }
 

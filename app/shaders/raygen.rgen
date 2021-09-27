@@ -26,6 +26,7 @@ layout(location = 0) rayPayloadEXT Payload {
     vec3 materialColor;
     float d;
     vec3 emission;
+    uint customIndex;
 } payload;
 
 
@@ -57,6 +58,7 @@ vec3 getSample(inout uint seed) {
     const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(rand(seed), rand(seed));
     const vec2 inUV = pixelCenter / vec2(gl_LaunchSizeEXT.xy);
     vec2 d = inUV * 2.0f - 1.0f;
+    d.y = -d.y;
 
     vec3 origin = (cam.viewInverse * vec4(0,0,0,1)).xyz;
     vec3 target = (cam.projInverse * vec4(d.x, d.y,1,1)).xyz;
@@ -72,15 +74,18 @@ vec3 getSample(inout uint seed) {
         float tmax = 1000.0f;
         traceRayEXT(topLevelAS, gl_RayFlagsOpaqueEXT, 0xff, 0, 0, 0, origin, tmin, direction, tmax, 0);
 
-        if (!payload.hit) break;
-        if (dot(payload.normal, direction) > 0) payload.normal = -payload.normal;
-
         if (dot(payload.emission, payload.emission) > 0) {
             accucolor += mask * payload.emission;
             break;
         }
 
-        origin = origin + payload.d * direction + 0.001f * payload.normal;
+        if (!payload.hit) break;
+        if (dot(payload.normal, direction) > 0) payload.normal = -payload.normal;
+        //accucolor = payload.normal;
+        //break;
+
+
+        origin = origin + payload.d * direction + 0.0001f * payload.normal;
         direction = SampleHemisphereCosine(payload.normal, rand(seed), rand(seed));
         mask *= payload.materialColor;
 
@@ -121,10 +126,9 @@ void main() {
     uint seed = getSeed();
     vec3 s = vec3(0);
 
-    for(int i=0; i<20; i++)
+    for(int i=0; i<10; i++)
         s += getSample(seed);
-    s /= 20.0f;
+    s /= 10.0f;
     vec4 oldColor = getShouldReset() ? vec4(0) : imageLoad(image, ivec2(gl_LaunchIDEXT.xy));
-    uint lol = 1;
     imageStore(image, ivec2(gl_LaunchIDEXT.xy), oldColor + vec4(s, 1));
 }

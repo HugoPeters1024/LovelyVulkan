@@ -42,6 +42,13 @@ struct RayTracerCamera {
     inline void setShouldReset(bool shouldReset) { properties0.z = shouldReset ? 1.0f : 0.0f; }
 };
 
+struct Vertex { glm::vec4 v; };
+
+struct Model {
+    std::vector<Vertex> vertexData;
+    std::vector<uint32_t> indexData;
+};
+
 struct RayTracerFrame {
     VkDescriptorSet descriptorSet;
     Buffer cameraBuffer;
@@ -50,9 +57,7 @@ struct RayTracerFrame {
 
 
 struct RayTracerInfo {
-    struct Vertex { float pos[4]; float emission[4]; };
-    std::vector<Vertex> vertexData;
-    std::vector<uint32_t> indexData;
+    std::vector<Model> models;
 };
 
 class RayTracer : public AppExt<RayTracerFrame> {
@@ -85,7 +90,7 @@ private:
 
     void getFeatures();
     void createRayTracingPipeline();
-    void createBottomLevelAccelerationStructure();
+    void createBottomLevelAccelerationStructures();
     void createTopLevelAccelerationStructure();
     void createShaderBindingTable();
 
@@ -110,7 +115,8 @@ private:
     VkPhysicalDeviceRayTracingPipelinePropertiesKHR rayTracingPipelineProperties{};
     VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures{};
 
-    AccelerationStructure bottomAC;
+
+    std::vector<AccelerationStructure> bottomACs;
     AccelerationStructure topAC;
 
     Image blueNoise;

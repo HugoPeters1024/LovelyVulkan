@@ -13,23 +13,33 @@ int main(int argc, char** argv) {
 
     lv::RayTracerInfo rayInfo{};
     {
+        rayInfo.models.push_back(lv::Model{});
+        auto& model = rayInfo.models.back();
         tinyobj::ObjReader reader;
-        reader.ParseFromFile("./app/sibenik/sibenik.obj");
+        reader.ParseFromFile("./app/bunny.obj");
         auto& attrib = reader.GetAttrib();
         auto& shape = reader.GetShapes()[0];
         for(size_t v=0; v<attrib.GetVertices().size(); v+=3) {
-            rayInfo.vertexData.push_back(lv::RayTracerInfo::Vertex { attrib.vertices[v+0], attrib.vertices[v+1], attrib.vertices[v+2], 0, 0, 0, 0, 0});
-            if (v % 100 == 0) {
-                rayInfo.vertexData.back().emission[0] = 25;
-                rayInfo.vertexData.back().emission[1] = 25;
-                rayInfo.vertexData.back().emission[2] = 25;
-            }
+            model.vertexData.push_back(lv::Vertex { glm::vec4(attrib.vertices[v+0], attrib.vertices[v+1], attrib.vertices[v+2], 0) });
         }
         for(const auto& idx : shape.mesh.indices) {
-            rayInfo.indexData.push_back(idx.vertex_index);
+            model.indexData.push_back(idx.vertex_index);
         }
-
     }
+//    {
+//        rayInfo.models.push_back(lv::Model{});
+//        auto& model = rayInfo.models.back();
+//        tinyobj::ObjReader reader;
+//        reader.ParseFromFile("./app/sibenik/sibenik.obj");
+//        auto& attrib = reader.GetAttrib();
+//        auto& shape = reader.GetShapes()[0];
+//        for(size_t v=0; v<attrib.GetVertices().size(); v+=3) {
+//            model.vertexData.push_back(lv::Vertex { glm::vec4(attrib.vertices[v+0], attrib.vertices[v+1], attrib.vertices[v+2], 0) });
+//        }
+//        for(const auto& idx : shape.mesh.indices) {
+//            model.indexData.push_back(idx.vertex_index);
+//        }
+//    }
     info.registerExtension<lv::RayTracer>(rayInfo);
 
     lv::RasterizerInfo rastInfo("app/shaders_bin/quad.vert.spv", "app/shaders_bin/quad.frag.spv");

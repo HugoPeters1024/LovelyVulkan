@@ -7,8 +7,10 @@ layout(location = 0) rayPayloadInEXT Payload {
     vec3 materialColor;
     float d;
     vec3 emission;
+    uint customIndex;
 } payload;
 
 void main() {
     payload.hit = false;
+    payload.emission = vec3(1.0f);
 }
