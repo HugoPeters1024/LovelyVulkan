@@ -39,8 +39,8 @@ vec3 hsv2rgb(vec3 c) {
 void main() {
     const vec3 barycentricCoords = vec3(1.0f - attribs.x - attribs.y, attribs.x, attribs.y);
     uint seed = gl_PrimitiveID * 17;
-    payload.emission = vec3(0); //gl_PrimitiveID < 800 ? 100 * hsv2rgb(vec3(rand(seed), 1, 1)) : vec3(0);
-    payload.materialColor = vec3(0.7f);
+    payload.emission = (gl_InstanceCustomIndexEXT == 1) ? 10 * hsv2rgb(vec3(rand(seed), 1, 1)) : vec3(0);
+    payload.materialColor = vec3(0.7f, 0.7f, 0.7f);
     payload.normal = getNormal();
     payload.d = gl_RayTmaxEXT;
     payload.hit = true;

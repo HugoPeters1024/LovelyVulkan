@@ -234,7 +234,7 @@ void RayTracer::createBottomLevelAccelerationStructures() {
     uint32_t totalVertices = 0;
     uint32_t totalIndices = 0;
 
-    for (const auto& model : info.models) {
+    for (auto& model : info.models) {
         totalVertices += model.vertexData.size();
         totalIndices += model.indexData.size();
     }
@@ -264,20 +264,19 @@ void RayTracer::createBottomLevelAccelerationStructures() {
     const VkBufferUsageFlags bufferUsage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
     buffertools::create_buffer_D_data(ctx, bufferUsage | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, allVertices.size() * sizeof(Vertex), allVertices.data(), &vertexBuffer);
     buffertools::create_buffer_D_data(ctx, bufferUsage | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, allIndices.size() * sizeof(uint32_t), allIndices.data(), &indexBuffer);
-    buffertools::create_buffer_D_data(ctx, bufferUsage, sizeof(VkTransformMatrixKHR), &transformMatrix, &transformBuffer);
+    buffertools::create_buffer_D_data(ctx, bufferUsage, allTransforms.size() * sizeof(VkTransformMatrixKHR), allTransforms.data(), &transformBuffer);
+
+    VkDeviceOrHostAddressConstKHR vertexBufferDeviceAddress{};
+    VkDeviceOrHostAddressConstKHR indexBufferDeviceAddress{};
+    VkDeviceOrHostAddressConstKHR transformBufferDeviceAddress{};
+
+    vertexBufferDeviceAddress.deviceAddress = getBufferDeviceAddress(vertexBuffer.buffer);
+    indexBufferDeviceAddress.deviceAddress = getBufferDeviceAddress(indexBuffer.buffer);
+    transformBufferDeviceAddress.deviceAddress = getBufferDeviceAddress(transformBuffer.buffer);
 
     vertexBufferOffset = 0;
     indexBufferOffset = 0;
     for(const auto& model : info.models) {
-
-        VkDeviceOrHostAddressConstKHR vertexBufferDeviceAddress{};
-        VkDeviceOrHostAddressConstKHR indexBufferDeviceAddress{};
-        VkDeviceOrHostAddressConstKHR transformBufferDeviceAddress{};
-
-        vertexBufferDeviceAddress.deviceAddress = getBufferDeviceAddress(vertexBuffer.buffer);
-        indexBufferDeviceAddress.deviceAddress = getBufferDeviceAddress(indexBuffer.buffer);
-        transformBufferDeviceAddress.deviceAddress = getBufferDeviceAddress(transformBuffer.buffer);
-
         // The actual build
         VkAccelerationStructureGeometryTrianglesDataKHR triangleData {
             .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR,
@@ -285,7 +284,7 @@ void RayTracer::createBottomLevelAccelerationStructures() {
             .vertexData = vertexBufferDeviceAddress,
             .vertexStride = sizeof(Vertex),
             // TODO: why does this not seem to matter?
-            .maxVertex = static_cast<uint32_t>(allVertices.size()),
+            .maxVertex = static_cast<uint32_t>(vertexBufferOffset + model.vertexData.size()),
             .indexType = VK_INDEX_TYPE_UINT32,
             .indexData = indexBufferDeviceAddress,
             .transformData = transformBufferDeviceAddress,
@@ -301,7 +300,7 @@ void RayTracer::createBottomLevelAccelerationStructures() {
         VkAccelerationStructureBuildGeometryInfoKHR accelerationStructureBuildGeometryInfo{};
         accelerationStructureBuildGeometryInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
         accelerationStructureBuildGeometryInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
-        accelerationStructureBuildGeometryInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR;
+        accelerationStructureBuildGeometryInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
         accelerationStructureBuildGeometryInfo.geometryCount = 1;
         accelerationStructureBuildGeometryInfo.pGeometries = &accelerationStructureGeometry;
 
@@ -328,9 +327,9 @@ void RayTracer::createBottomLevelAccelerationStructures() {
 
         VkAccelerationStructureBuildRangeInfoKHR accelerationStructureBuildRangeInfo{};
         accelerationStructureBuildRangeInfo.primitiveCount = numTriangles;
-        accelerationStructureBuildRangeInfo.primitiveOffset = 0;
-        accelerationStructureBuildRangeInfo.firstVertex = 0;
-        accelerationStructureBuildRangeInfo.transformOffset = transformBufferOffset;
+        accelerationStructureBuildRangeInfo.primitiveOffset = indexBufferOffset * sizeof(uint32_t);
+        accelerationStructureBuildRangeInfo.firstVertex = vertexBufferOffset;
+        accelerationStructureBuildRangeInfo.transformOffset = transformBufferOffset * sizeof(VkTransformMatrixKHR);
 
         auto rangeInfoPtr = &accelerationStructureBuildRangeInfo;
 
@@ -344,7 +343,6 @@ void RayTracer::createBottomLevelAccelerationStructures() {
         ctx.endSingleTimeCommands(cmdBuffer);
 
         buffertools::destroyBuffer(ctx, scratchBuffer);
-
         vertexBufferOffset += model.vertexData.size();
         indexBufferOffset += model.indexData.size();
         transformBufferOffset += 1;
@@ -359,10 +357,11 @@ void RayTracer::createTopLevelAccelerationStructure() {
     };
 
     std::vector<VkAccelerationStructureInstanceKHR> instances;
-    for(const auto& bottomAC : bottomACs) {
+    for(uint32_t i=0; i<bottomACs.size(); i++) {
+        const auto& bottomAC = bottomACs[i];
         VkAccelerationStructureInstanceKHR instance{};
         instance.transform = transformMatrix;
-        instance.instanceCustomIndex = 0;
+        instance.instanceCustomIndex = i;
         instance.mask = 0xFF;
         instance.instanceShaderBindingTableRecordOffset = 0;
         instance.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
@@ -421,7 +420,7 @@ void RayTracer::createTopLevelAccelerationStructure() {
     accelerationBuildGeometryInfo.scratchData.deviceAddress = getBufferDeviceAddress(scratchBuffer.buffer);
  
     VkAccelerationStructureBuildRangeInfoKHR accelerationStructureBuildRangeInfo{};
-    accelerationStructureBuildRangeInfo.primitiveCount = 1;
+    accelerationStructureBuildRangeInfo.primitiveCount = instances.size();
     accelerationStructureBuildRangeInfo.primitiveOffset = 0;
     accelerationStructureBuildRangeInfo.firstVertex = 0;
     accelerationStructureBuildRangeInfo.transformOffset = 0;
