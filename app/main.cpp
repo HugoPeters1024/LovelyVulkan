@@ -10,36 +10,12 @@ int main(int argc, char** argv) {
     imageStoreInfo.defineStaticImage(lv::ImageID(1), VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_LAYOUT_GENERAL);
     info.registerExtension<lv::ImageStore>(imageStoreInfo);
 
-
     lv::RayTracerInfo rayInfo{};
-    {
-        rayInfo.models.push_back(lv::Model{});
-        auto& model = rayInfo.models.back();
-        tinyobj::ObjReader reader;
-        reader.ParseFromFile("./app/sibenik/sibenik.obj");
-        auto& attrib = reader.GetAttrib();
-        auto& shape = reader.GetShapes()[0];
-        for(size_t v=0; v<attrib.GetVertices().size(); v+=3) {
-            model.vertexData.push_back(lv::Vertex { glm::vec4(attrib.vertices[v+0], attrib.vertices[v+1], attrib.vertices[v+2], 0) });
-        }
-        for(const auto& idx : shape.mesh.indices) {
-            model.indexData.push_back(idx.vertex_index);
-        }
-    }
-    {
-        rayInfo.models.push_back(lv::Model{});
-        auto& model = rayInfo.models.back();
-        tinyobj::ObjReader reader;
-        reader.ParseFromFile("./app/bunny.obj");
-        auto& attrib = reader.GetAttrib();
-        auto& shape = reader.GetShapes()[0];
-        for(size_t v=0; v<attrib.GetVertices().size(); v+=3) {
-            model.vertexData.push_back(lv::Vertex { glm::vec4(attrib.vertices[v+0], attrib.vertices[v+1], attrib.vertices[v+2], 0) });
-        }
-        for(const auto& idx : shape.mesh.indices) {
-            model.indexData.push_back(idx.vertex_index);
-        }
-    }
+    lv::Mesh sibenik, bunny;
+    sibenik.load("./app/sibenik/sibenik.obj");
+    bunny.load("./app/bunny.obj");
+    rayInfo.meshes.push_back(&sibenik);
+    rayInfo.meshes.push_back(&bunny);
     info.registerExtension<lv::RayTracer>(rayInfo);
 
     lv::RasterizerInfo rastInfo("app/shaders_bin/quad.vert.spv", "app/shaders_bin/quad.frag.spv");

@@ -6,6 +6,7 @@
 #include "ImageStore.h"
 #include "ImageTools.h"
 #include "Camera.h"
+#include "Mesh.h"
 
 namespace lv {
 
@@ -42,12 +43,6 @@ struct RayTracerCamera {
     inline void setShouldReset(bool shouldReset) { properties0.z = shouldReset ? 1.0f : 0.0f; }
 };
 
-struct Vertex { glm::vec4 v; };
-
-struct Model {
-    std::vector<Vertex> vertexData;
-    std::vector<uint32_t> indexData;
-};
 
 struct RayTracerFrame {
     VkDescriptorSet descriptorSet;
@@ -57,7 +52,7 @@ struct RayTracerFrame {
 
 
 struct RayTracerInfo {
-    std::vector<Model> models;
+    std::vector<const Mesh*> meshes;
 };
 
 class RayTracer : public AppExt<RayTracerFrame> {

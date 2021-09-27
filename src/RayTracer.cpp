@@ -234,9 +234,9 @@ void RayTracer::createBottomLevelAccelerationStructures() {
     uint32_t totalVertices = 0;
     uint32_t totalIndices = 0;
 
-    for (auto& model : info.models) {
-        totalVertices += model.vertexData.size();
-        totalIndices += model.indexData.size();
+    for (auto& mesh : info.meshes) {
+        totalVertices += mesh->vertices.size();
+        totalIndices += mesh->indices.size();
     }
 
     std::vector<Vertex> allVertices(totalVertices);
@@ -245,11 +245,11 @@ void RayTracer::createBottomLevelAccelerationStructures() {
     uint32_t vertexBufferOffset = 0;
     uint32_t indexBufferOffset = 0;
     uint32_t transformBufferOffset = 0;
-    for (const auto& model : info.models) {
-        memcpy(allVertices.data() + vertexBufferOffset, model.vertexData.data(), model.vertexData.size() * sizeof(Vertex));
-        memcpy(allIndices.data() + indexBufferOffset, model.indexData.data(), model.indexData.size() * sizeof(uint32_t));
-        vertexBufferOffset += model.vertexData.size();
-        indexBufferOffset += model.indexData.size();
+    for (const auto& model : info.meshes) {
+        memcpy(allVertices.data() + vertexBufferOffset, model->vertices.data(), model->vertices.size() * sizeof(Vertex));
+        memcpy(allIndices.data() + indexBufferOffset, model->indices.data(), model->indices.size() * sizeof(uint32_t));
+        vertexBufferOffset += model->vertices.size();
+        indexBufferOffset += model->indices.size();
     }
 
     float scale = 0.4f;
@@ -259,7 +259,7 @@ void RayTracer::createBottomLevelAccelerationStructures() {
         0.0f, 0.0f, scale, 0.0f,
     };
 
-    std::vector<VkTransformMatrixKHR> allTransforms(info.models.size(), transformMatrix);
+    std::vector<VkTransformMatrixKHR> allTransforms(info.meshes.size(), transformMatrix);
 
     const VkBufferUsageFlags bufferUsage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
     buffertools::create_buffer_D_data(ctx, bufferUsage | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, allVertices.size() * sizeof(Vertex), allVertices.data(), &vertexBuffer);
@@ -276,7 +276,7 @@ void RayTracer::createBottomLevelAccelerationStructures() {
 
     vertexBufferOffset = 0;
     indexBufferOffset = 0;
-    for(const auto& model : info.models) {
+    for(const auto& model : info.meshes) {
         // The actual build
         VkAccelerationStructureGeometryTrianglesDataKHR triangleData {
             .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR,
@@ -284,7 +284,7 @@ void RayTracer::createBottomLevelAccelerationStructures() {
             .vertexData = vertexBufferDeviceAddress,
             .vertexStride = sizeof(Vertex),
             // TODO: why does this not seem to matter?
-            .maxVertex = static_cast<uint32_t>(vertexBufferOffset + model.vertexData.size()),
+            .maxVertex = static_cast<uint32_t>(vertexBufferOffset + model->vertices.size()),
             .indexType = VK_INDEX_TYPE_UINT32,
             .indexData = indexBufferDeviceAddress,
             .transformData = transformBufferDeviceAddress,
@@ -304,7 +304,7 @@ void RayTracer::createBottomLevelAccelerationStructures() {
         accelerationStructureBuildGeometryInfo.geometryCount = 1;
         accelerationStructureBuildGeometryInfo.pGeometries = &accelerationStructureGeometry;
 
-        const uint32_t numTriangles = model.indexData.size() / 3;
+        const uint32_t numTriangles = model->indices.size() / 3;
         VkAccelerationStructureBuildSizesInfoKHR accelerationStructureBuildSizesInfo{};
         accelerationStructureBuildSizesInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
         vkGetAccelerationStructureBuildSizesKHR(ctx.vkDevice, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &accelerationStructureBuildGeometryInfo, &numTriangles, &accelerationStructureBuildSizesInfo);
@@ -343,8 +343,8 @@ void RayTracer::createBottomLevelAccelerationStructures() {
         ctx.endSingleTimeCommands(cmdBuffer);
 
         buffertools::destroyBuffer(ctx, scratchBuffer);
-        vertexBufferOffset += model.vertexData.size();
-        indexBufferOffset += model.indexData.size();
+        vertexBufferOffset += model->vertices.size();
+        indexBufferOffset += model->indices.size();
         transformBufferOffset += 1;
     }
 }

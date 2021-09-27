@@ -126,9 +126,9 @@ void main() {
     uint seed = getSeed();
     vec3 s = vec3(0);
 
-    for(int i=0; i<10; i++)
+    for(int i=0; i<15; i++)
         s += getSample(seed);
-    s /= 10.0f;
+    s /= 15.0f;
     vec4 oldColor = getShouldReset() ? vec4(0) : imageLoad(image, ivec2(gl_LaunchIDEXT.xy));
     imageStore(image, ivec2(gl_LaunchIDEXT.xy), oldColor + vec4(s, 1));
 }
