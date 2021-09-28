@@ -33,14 +33,19 @@ struct app_extensions<RayTracer> {
 };
 
 struct RayTracerCamera {
-    alignas(16) glm::mat4 viewInverse;
-    alignas(16) glm::mat4 projInverse;
-    alignas(16) glm::vec4 viewDir;
-    alignas(16) glm::vec4 properties0;
+    glm::mat4 viewInverse;
+    glm::mat4 projInverse;
+    glm::vec4 viewDir;
+    glm::vec4 properties0;
+
 
     inline void setTime(float time) { properties0[0] = time; }
     inline void setTick(uint32_t tick) { properties0[1] = reinterpret_cast<float&>(tick); }
     inline void setShouldReset(bool shouldReset) { properties0.z = shouldReset ? 1.0f : 0.0f; }
+};
+
+struct TriangleData {
+    glm::vec4 normals[3];
 };
 
 
@@ -96,6 +101,7 @@ private:
 
     Buffer vertexBuffer; 
     Buffer indexBuffer;
+    Buffer triangleDataBuffer;
     Buffer transformBuffer;
 
     std::vector<VkRayTracingShaderGroupCreateInfoKHR> shaderGroups{};
@@ -112,6 +118,7 @@ private:
 
 
     std::vector<AccelerationStructure> bottomACs;
+    std::vector<uint32_t> triangleDataOffsets;
     AccelerationStructure topAC;
 
     Image blueNoise;

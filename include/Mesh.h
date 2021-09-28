@@ -12,6 +12,8 @@ public:
 
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
+    // Correspond to an index
+    std::vector<glm::vec3> normals;
 };
 
 }

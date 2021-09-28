@@ -81,9 +81,6 @@ vec3 getSample(inout uint seed) {
 
         if (!payload.hit) break;
         if (dot(payload.normal, direction) > 0) payload.normal = -payload.normal;
-        //accucolor = payload.normal;
-        //break;
-
 
         origin = origin + payload.d * direction + 0.0001f * payload.normal;
         direction = SampleHemisphereCosine(payload.normal, rand(seed), rand(seed));

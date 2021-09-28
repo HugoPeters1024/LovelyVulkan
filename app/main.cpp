@@ -12,8 +12,8 @@ int main(int argc, char** argv) {
 
     lv::RayTracerInfo rayInfo{};
     lv::Mesh sibenik, bunny;
-    sibenik.load("./app/sibenik/sibenik.obj");
     bunny.load("./app/bunny.obj");
+    sibenik.load("./app/sibenik/sibenik.obj");
     rayInfo.meshes.push_back(&sibenik);
     rayInfo.meshes.push_back(&bunny);
     info.registerExtension<lv::RayTracer>(rayInfo);

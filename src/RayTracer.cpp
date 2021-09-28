@@ -16,6 +16,7 @@ RayTracer::~RayTracer() {
     imagetools::destroyImage(ctx, blueNoise);
     buffertools::destroyBuffer(ctx, vertexBuffer);
     buffertools::destroyBuffer(ctx, indexBuffer);
+    buffertools::destroyBuffer(ctx, triangleDataBuffer);
     buffertools::destroyBuffer(ctx, transformBuffer);
     buffertools::destroyBuffer(ctx, raygenShaderBindingTable);
     buffertools::destroyBuffer(ctx, missShaderBindingTable);
@@ -83,11 +84,17 @@ RayTracerFrame* RayTracer::buildFrame(FrameContext& frame) {
     indexBufferDescriptorInfo.range = VK_WHOLE_SIZE;
     VkWriteDescriptorSet indexBufferWrite = vks::initializers::writeDescriptorSet(ret->descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3, &indexBufferDescriptorInfo);
 
-    VkDescriptorBufferInfo vertexBufferDescriptorInfo{};;
+    VkDescriptorBufferInfo vertexBufferDescriptorInfo{};
     vertexBufferDescriptorInfo.buffer = vertexBuffer.buffer;
     vertexBufferDescriptorInfo.offset = 0;
     vertexBufferDescriptorInfo.range = VK_WHOLE_SIZE;
     VkWriteDescriptorSet vertexBufferWrite = vks::initializers::writeDescriptorSet(ret->descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 4, &vertexBufferDescriptorInfo);
+
+    VkDescriptorBufferInfo triangleDataBufferDescriptorInfo{};
+    triangleDataBufferDescriptorInfo.buffer = triangleDataBuffer.buffer;
+    triangleDataBufferDescriptorInfo.offset = 0;
+    triangleDataBufferDescriptorInfo.range = VK_WHOLE_SIZE;
+    VkWriteDescriptorSet triangleDataBufferWrite = vks::initializers::writeDescriptorSet(ret->descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 5, &triangleDataBufferDescriptorInfo);
 
     VkDescriptorImageInfo blueNoiseDescriptorInfo{};
     blueNoiseDescriptorInfo.imageView = blueNoise.view;
@@ -96,7 +103,7 @@ RayTracerFrame* RayTracer::buildFrame(FrameContext& frame) {
     VkWriteDescriptorSet blueNoiseWrite = vks::initializers::writeDescriptorSet(ret->descriptorSet, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 8, &blueNoiseDescriptorInfo);
 
 
-    std::array<VkWriteDescriptorSet, 6> writes { writeAS, imageWrite, uniformBufferWrite, indexBufferWrite, vertexBufferWrite, blueNoiseWrite };
+    std::array<VkWriteDescriptorSet, 7> writes { writeAS, imageWrite, uniformBufferWrite, indexBufferWrite, vertexBufferWrite, triangleDataBufferWrite, blueNoiseWrite };
     vkUpdateDescriptorSets(ctx.vkDevice, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
     return ret;
 }
@@ -164,8 +171,9 @@ void RayTracer::createRayTracingPipeline() {
     auto uniformBufferBinding = vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_RAYGEN_BIT_KHR, 2);
     auto indexBufferBinding = vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, 3);
     auto vertexBufferBinding = vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, 4);
+    auto triangleDataBufferBinding = vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, 5);
     auto blueNoiseBinding = vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_RAYGEN_BIT_KHR, 8);
-    std::vector<VkDescriptorSetLayoutBinding> bindings { ASLayoutBinding, resultImageLayoutBinding, uniformBufferBinding, indexBufferBinding, vertexBufferBinding, blueNoiseBinding };
+    std::vector<VkDescriptorSetLayoutBinding> bindings { ASLayoutBinding, resultImageLayoutBinding, uniformBufferBinding, indexBufferBinding, vertexBufferBinding, triangleDataBufferBinding, blueNoiseBinding };
 
     auto layoutCreateInfo = vks::initializers::descriptorSetLayoutCreateInfo(bindings);
     vkCheck(vkCreateDescriptorSetLayout(ctx.vkDevice, &layoutCreateInfo, nullptr, &descriptorSetLayout));
@@ -235,12 +243,15 @@ void RayTracer::createBottomLevelAccelerationStructures() {
     uint32_t totalIndices = 0;
 
     for (auto& mesh : info.meshes) {
+        triangleDataOffsets.push_back(totalIndices/3);
         totalVertices += mesh->vertices.size();
         totalIndices += mesh->indices.size();
     }
 
     std::vector<Vertex> allVertices(totalVertices);
     std::vector<uint32_t> allIndices(totalIndices);
+    std::vector<TriangleData> allTriangleData(totalIndices/3);
+
 
     uint32_t vertexBufferOffset = 0;
     uint32_t indexBufferOffset = 0;
@@ -248,6 +259,14 @@ void RayTracer::createBottomLevelAccelerationStructures() {
     for (const auto& model : info.meshes) {
         memcpy(allVertices.data() + vertexBufferOffset, model->vertices.data(), model->vertices.size() * sizeof(Vertex));
         memcpy(allIndices.data() + indexBufferOffset, model->indices.data(), model->indices.size() * sizeof(uint32_t));
+        assert(model->normals.size() == model->indices.size());
+        for(uint32_t i=0; i<model->indices.size(); i+=3) {
+            TriangleData triangleData{};
+            triangleData.normals[0] = glm::vec4(model->normals[i+0],0);
+            triangleData.normals[1] = glm::vec4(model->normals[i+1],0);
+            triangleData.normals[2] = glm::vec4(model->normals[i+2],0);
+            allTriangleData[indexBufferOffset/3 + i/3] = triangleData;
+        }
         vertexBufferOffset += model->vertices.size();
         indexBufferOffset += model->indices.size();
     }
@@ -264,6 +283,7 @@ void RayTracer::createBottomLevelAccelerationStructures() {
     const VkBufferUsageFlags bufferUsage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
     buffertools::create_buffer_D_data(ctx, bufferUsage | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, allVertices.size() * sizeof(Vertex), allVertices.data(), &vertexBuffer);
     buffertools::create_buffer_D_data(ctx, bufferUsage | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, allIndices.size() * sizeof(uint32_t), allIndices.data(), &indexBuffer);
+    buffertools::create_buffer_D_data(ctx, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, allTriangleData.size() * sizeof(TriangleData), allTriangleData.data(), &triangleDataBuffer);
     buffertools::create_buffer_D_data(ctx, bufferUsage, allTransforms.size() * sizeof(VkTransformMatrixKHR), allTransforms.data(), &transformBuffer);
 
     VkDeviceOrHostAddressConstKHR vertexBufferDeviceAddress{};
@@ -361,7 +381,7 @@ void RayTracer::createTopLevelAccelerationStructure() {
         const auto& bottomAC = bottomACs[i];
         VkAccelerationStructureInstanceKHR instance{};
         instance.transform = transformMatrix;
-        instance.instanceCustomIndex = i;
+        instance.instanceCustomIndex = triangleDataOffsets[i];
         instance.mask = 0xFF;
         instance.instanceShaderBindingTableRecordOffset = 0;
         instance.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
