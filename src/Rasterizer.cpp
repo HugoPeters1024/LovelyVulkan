@@ -3,7 +3,7 @@
 namespace lv {
 
 Rasterizer::Rasterizer(AppContext& ctx, RasterizerInfo info) 
-    : AppExt<RasterizerFrame>(ctx), info(info) {
+    : AppExt(ctx), info(info) {
     createRenderPass();
     createDescriptorSetLayout();
     createPipelineLayout();
@@ -17,21 +17,21 @@ Rasterizer::~Rasterizer() {
     vkDestroyRenderPass(ctx.vkDevice, renderPass, nullptr);
 }
 
-RasterizerFrame* Rasterizer::buildFrame(FrameContext& frame) {
-    auto ret = new RasterizerFrame();
-    auto allocInfo = vks::initializers::descriptorSetAllocateInfo(frame.ctx.vkDescriptorPool, &descriptorSetLayout, 1);
-    vkCheck(vkAllocateDescriptorSets(frame.ctx.vkDevice, &allocInfo, &ret->descriptorSet))
+void Rasterizer::embellishFrameContext(FrameContext& frame) {
+    auto& ret = frame.registerExtFrame<RasterizerFrame>();
+    auto allocInfo = vks::initializers::descriptorSetAllocateInfo(ctx.vkDescriptorPool, &descriptorSetLayout, 1);
+    vkCheck(vkAllocateDescriptorSets(frame.ctx.vkDevice, &allocInfo, &ret.descriptorSet))
 
     auto samplerInfo = vks::initializers::samplerCreateInfo(1.0f);
-    vkCheck(vkCreateSampler(ctx.vkDevice, &samplerInfo, nullptr, &ret->sampler));
+    vkCheck(vkCreateSampler(ctx.vkDevice, &samplerInfo, nullptr, &ret.sampler));
 
     std::vector<VkDescriptorImageInfo> descriptorImages;
     std::vector<VkWriteDescriptorSet> descriptorWrites;
 
     for(const auto& texture : info.textures) {
-        descriptorImages.push_back(vks::initializers::descriptorImageInfo(ret->sampler, texture.imageSelector(frame), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
+        descriptorImages.push_back(vks::initializers::descriptorImageInfo(ret.sampler, texture.imageSelector(frame), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
         auto& texInfo = descriptorImages.back();
-        descriptorWrites.push_back(vks::initializers::writeDescriptorSet(ret->descriptorSet, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, texture.binding, &texInfo));
+        descriptorWrites.push_back(vks::initializers::writeDescriptorSet(ret.descriptorSet, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, texture.binding, &texInfo));
     }
 
     vkUpdateDescriptorSets(ctx.vkDevice, descriptorWrites.size(), descriptorWrites.data(), 0, nullptr);
@@ -41,30 +41,32 @@ RasterizerFrame* Rasterizer::buildFrame(FrameContext& frame) {
         attachments.push_back(attachmentInfo.imageSelector(frame));
     }
 
+    auto& wFrame = frame.getExtFrame<WindowFrame>();
     VkFramebufferCreateInfo framebufferInfo{
         .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
         .renderPass = renderPass,
         .attachmentCount = static_cast<uint32_t>(attachments.size()),
         .pAttachments = attachments.data(),
-        .width = frame.swapchain.width,
-        .height = frame.swapchain.height,
+        .width = wFrame.width, 
+        .height = wFrame.height,
         .layers = 1,
     };
 
-    vkCheck(vkCreateFramebuffer(ctx.vkDevice, &framebufferInfo, nullptr, &ret->framebuffer));
-    return ret;
+    vkCheck(vkCreateFramebuffer(ctx.vkDevice, &framebufferInfo, nullptr, &ret.framebuffer));
 
 }
 
-void Rasterizer::destroyFrame(RasterizerFrame* frame) {
-    vkDestroyFramebuffer(ctx.vkDevice, frame->framebuffer, nullptr);
-    vkDestroySampler(ctx.vkDevice, frame->sampler, nullptr);
+void Rasterizer::cleanupFrameContext(FrameContext& frame) {
+    auto& myFrame = frame.getExtFrame<RasterizerFrame>();
+    vkDestroyFramebuffer(ctx.vkDevice, myFrame.framebuffer, nullptr);
+    vkDestroySampler(ctx.vkDevice, myFrame.sampler, nullptr);
 }
 
 void Rasterizer::startPass(FrameContext& frame) const {
     std::vector<VkClearValue> clearValues(info.attachments.size(), VkClearValue { 0.0f, 0.0f, 0.0f, 0.0f });
 
-    auto myFrame = frame.getExtFrame<RasterizerFrame>();
+    auto& myFrame = frame.getExtFrame<RasterizerFrame>();
+    auto& wFrame = frame.getExtFrame<WindowFrame>();
 
     VkRenderPassBeginInfo renderPassInfo {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
@@ -72,30 +74,30 @@ void Rasterizer::startPass(FrameContext& frame) const {
         .framebuffer = myFrame.framebuffer,
         .renderArea = {
                 .offset = {0,0},
-                .extent = {frame.swapchain.width, frame.swapchain.height},
+                .extent = {wFrame.width, wFrame.height},
         },
         .clearValueCount = static_cast<uint32_t>(clearValues.size()),
         .pClearValues = clearValues.data(),
     };
     VkViewport viewport {
             .x = 0.0f,
-            .y = static_cast<float>(frame.swapchain.height),
-            .width = static_cast<float>(frame.swapchain.width),
-            .height = -static_cast<float>(frame.swapchain.height),
+            .y = static_cast<float>(wFrame.height),
+            .width = static_cast<float>(wFrame.width),
+            .height = -static_cast<float>(wFrame.height),
             .minDepth = 0.0f,
             .maxDepth = 1.0f,
     };
-    VkRect2D scissor{{0,0}, {frame.swapchain.width, frame.swapchain.height}};
+    VkRect2D scissor{{0,0}, {wFrame.width, wFrame.height}};
 
-    vkCmdBeginRenderPass(frame.commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-    vkCmdSetViewport(frame.commandBuffer, 0, 1, &viewport);
-    vkCmdSetScissor(frame.commandBuffer, 0, 1, &scissor);
-    vkCmdBindPipeline(frame.commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-    vkCmdBindDescriptorSets(frame.commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &myFrame.descriptorSet, 0, nullptr);
+    vkCmdBeginRenderPass(frame.cmdBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+    vkCmdSetViewport(frame.cmdBuffer, 0, 1, &viewport);
+    vkCmdSetScissor(frame.cmdBuffer, 0, 1, &scissor);
+    vkCmdBindPipeline(frame.cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+    vkCmdBindDescriptorSets(frame.cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &myFrame.descriptorSet, 0, nullptr);
 }
 
 void Rasterizer::endPass(FrameContext& frame) const {
-    vkCmdEndRenderPass(frame.commandBuffer);
+    vkCmdEndRenderPass(frame.cmdBuffer);
 }
 
 void Rasterizer::createRenderPass() {

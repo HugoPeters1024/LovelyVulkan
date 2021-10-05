@@ -3,7 +3,7 @@
 namespace lv {
 
 ComputeShader::ComputeShader(AppContext& ctx, const char* filePath, ComputeShaderInfo info) 
-    : AppExt<ComputeFrame>(ctx), filePath(filePath), info(info) {
+    : AppExt(ctx), filePath(filePath), info(info) {
     logger::debug("Core of comp shader being build");
     createDescriptorSetLayout();
     createPipelineLayout();
@@ -74,14 +74,13 @@ void ComputeShader::createPipeline() {
     vkDestroyShaderModule(ctx.vkDevice, module, nullptr);
 }
 
-ComputeFrame* ComputeShader::buildFrame(FrameContext& frame) {
+void ComputeShader::buildFrame(FrameContext& frame, ComputeFrame& ret) const {
     logger::debug("Comp frame being build");
 
-    auto ret = new ComputeFrame();
-    ret->descriptorSets.resize(info.descriptorSelectorsTable.size());
+    ret.descriptorSets.resize(info.descriptorSelectorsTable.size());
     std::vector<VkDescriptorSetLayout> layouts(info.descriptorSelectorsTable.size(), descriptorSetLayout);
-    auto allocInfo = vks::initializers::descriptorSetAllocateInfo(frame.ctx.vkDescriptorPool, layouts.data(), info.descriptorSelectorsTable.size());
-    vkCheck(vkAllocateDescriptorSets(frame.ctx.vkDevice, &allocInfo, ret->descriptorSets.data()));
+    auto allocInfo = vks::initializers::descriptorSetAllocateInfo(ctx.vkDescriptorPool, layouts.data(), info.descriptorSelectorsTable.size());
+    vkCheck(vkAllocateDescriptorSets(ctx.vkDevice, &allocInfo, ret.descriptorSets.data()));
 
     for(const auto& descriptors : info.descriptorSelectorsTable) {
         auto& descriptorIdx = descriptors.first;
@@ -91,7 +90,7 @@ ComputeFrame* ComputeShader::buildFrame(FrameContext& frame) {
                 // TODO: make sure that the imageInfos are sorted by binding
                 VkImageView imageView = *reinterpret_cast<VkImageView*>(descriptorSelector.selector(frame));
                 auto imageInfo = vks::initializers::descriptorImageInfo(nullptr, imageView, VK_IMAGE_LAYOUT_GENERAL);
-                auto writeInfo = vks::initializers::writeDescriptorSet(ret->descriptorSets[descriptorIdx], VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, descriptorSelector.binding, &imageInfo);
+                auto writeInfo = vks::initializers::writeDescriptorSet(ret.descriptorSets[descriptorIdx], VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, descriptorSelector.binding, &imageInfo);
                 vkUpdateDescriptorSets(frame.ctx.vkDevice, 1, &writeInfo, 0, nullptr);
             } else {
                 throw std::runtime_error("Not implemented");
@@ -99,7 +98,5 @@ ComputeFrame* ComputeShader::buildFrame(FrameContext& frame) {
         }
         //vkUpdateDescriptorSets(frame.ctx.vkDevice, writes.size(), writes.data(), 0, nullptr);
     }
-
-    return ret;
 }
 }

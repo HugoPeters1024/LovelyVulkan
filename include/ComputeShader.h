@@ -3,6 +3,8 @@
 
 #include "precomp.h"
 #include "AppContext.h"
+#include "AppExt.h"
+#include "Window.h"
 
 namespace lv {
 
@@ -45,7 +47,7 @@ struct ComputeFrame {
     std::vector<VkDescriptorSet> descriptorSets;
 };
 
-class ComputeShader : public AppExt<ComputeFrame> {
+class ComputeShader : public AppExt {
 public:
     ComputeShader(AppContext& ctx, const char* filePath, ComputeShaderInfo info);
     ~ComputeShader() override;
@@ -55,15 +57,14 @@ public:
     VkPipeline pipeline;
     VkDescriptorSetLayout descriptorSetLayout;
 
-
-    ComputeFrame* buildFrame(FrameContext& frame) override;
-    void destroyFrame(ComputeFrame* frame) override {}
 private:
     const char* filePath;
     ComputeShaderInfo info;
     void createDescriptorSetLayout();
     void createPipelineLayout();
     void createPipeline();
+
+    void buildFrame(FrameContext& frame, ComputeFrame& ret) const;
 };
 
 }

@@ -1,5 +1,7 @@
 #include "AppContext.h"
 #include "Utils.h"
+#include "AppExt.h"
+#include "FrameManager.h"
 
 namespace lv {
 
@@ -25,11 +27,13 @@ AppContext::AppContext(AppContextInfo info)
     createVmaAllocator();
     createCommandPool();
     createDescriptorPool();
-    createExtensions();
 }
 
 AppContext::~AppContext() {
     vkDeviceWaitIdle(vkDevice);
+    for(auto& manager : frameManagers)
+        delete manager;
+
     auto it = extensionOrder.rbegin();
     while(it != extensionOrder.rend()) {
         auto ext = extensions[*it];
@@ -303,16 +307,6 @@ void AppContext::createDescriptorPool() {
 
     vkCheck(vkCreateDescriptorPool(vkDevice, &poolInfo, nullptr, &vkDescriptorPool));
 }
-
-void AppContext::createExtensions() {
-    for(const auto& pair : info.extensionGenerators) {
-        auto ext = pair.second(*this);
-        logger::debug("Building extension {}", pair.first.name());
-        extensions.insert({pair.first, ext});
-        extensionOrder.push_back(pair.first);
-    }
-}
-
 
 // ---------- INTERNAL HELPER FUNCTIONS --------------
 

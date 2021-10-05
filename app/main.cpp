@@ -4,39 +4,38 @@ const lv::ImageID COMPUTE_IMAGE = lv::ImageID(0);
 
 int main(int argc, char** argv) {
     logger::set_level(spdlog::level::debug);
+
     lv::AppContextInfo info;
+    info.registerExtension<lv::ImageStore>();
+    info.registerExtension<lv::RayTracer>();
+    info.registerExtension<lv::Rasterizer>();
+    lv::AppContext ctx(info);
+
 
     lv::ImageStoreInfo imageStoreInfo;
     imageStoreInfo.defineStaticImage(lv::ImageID(1), VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_LAYOUT_GENERAL);
-    info.registerExtension<lv::ImageStore>(imageStoreInfo);
+    auto& imageStore = ctx.addExtension<lv::ImageStore>(ctx, imageStoreInfo);
+
+    lv::RasterizerInfo rastInfo("app/shaders_bin/quad.vert.spv", "app/shaders_bin/quad.frag.spv");
+    rastInfo.defineAttachment(0, [](lv::FrameContext& frame) { return frame.getExtFrame<lv::WindowFrame>().vkView; });
+    rastInfo.defineTexture(0, [](lv::FrameContext& frame) { return frame.getExtFrame<lv::ImageStoreFrame>().getStatic(lv::ImageID(1))->view; });
+    auto& rasterizer = ctx.addExtension<lv::Rasterizer>(ctx, rastInfo);
 
     lv::RayTracerInfo rayInfo{};
     lv::Mesh sibenik, bunny;
-    bunny.load("./app/bunny.obj");
+    bunny.load("./app/cube.obj");
     sibenik.load("./app/sibenik/sibenik.obj");
     rayInfo.meshes.push_back(&sibenik);
     rayInfo.meshes.push_back(&bunny);
-    info.registerExtension<lv::RayTracer>(rayInfo);
-
-    lv::RasterizerInfo rastInfo("app/shaders_bin/quad.vert.spv", "app/shaders_bin/quad.frag.spv");
-    rastInfo.defineAttachment(0, [](lv::FrameContext& frame) { return frame.swapchain.vkView; });
-    rastInfo.defineTexture(0, [](lv::FrameContext& frame) { return frame.getExtFrame<lv::ImageStoreFrame>().getStatic(lv::ImageID(1))->view; });
-    info.registerExtension<lv::Rasterizer>(rastInfo);
-
-
-    lv::AppContext ctx(info);
-
-    auto imageStore = ctx.getExtension<lv::ImageStore>();
-    auto rasterizer = ctx.getExtension<lv::Rasterizer>();
-    auto raytracer = ctx.getExtension<lv::RayTracer>();
+    auto& raytracer = ctx.addExtension<lv::RayTracer>(ctx, rayInfo);
 
     lv::WindowInfo windowInfo;
     windowInfo.width = 1280;
     windowInfo.height = 768;
     windowInfo.windowName = "Lovely Vulkan";
-    lv::Window window(ctx, windowInfo);
+    auto& window = ctx.addFrameManager<lv::Window>(ctx, windowInfo);
 
-    lv::Camera camera{window.glfwWindow};
+    lv::Camera camera{window.getGLFWwindow()};
 
     uint32_t tick = 0;
     double ping = glfwGetTime();
@@ -49,20 +48,20 @@ int main(int argc, char** argv) {
         }
 
         window.nextFrame([&](lv::FrameContext& frame) {
-            auto imgStore = frame.getExtFrame<lv::ImageStoreFrame>();
-            auto rastFrame = frame.getExtFrame<lv::RasterizerFrame>();
+            auto& imgStore = frame.getExtFrame<lv::ImageStoreFrame>();
+            auto& rastFrame = frame.getExtFrame<lv::RasterizerFrame>();
 
             // Run the raytracer
             camera.update(dt);
-            if (camera.getHasMoved()) raytracer->resetAccumulator();
-            raytracer->render(frame, camera);
+            if (camera.getHasMoved()) raytracer.resetAccumulator();
+            raytracer.render(frame, camera);
 
             // Prepare the image to be sampled when rendering to the screen
             auto barrier = vks::initializers::imageMemoryBarrier(
                     imgStore.getStatic(lv::ImageID(1))->image,
                     VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
             vkCmdPipelineBarrier(
-                    frame.commandBuffer,
+                    frame.cmdBuffer,
                     VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                     VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                     VK_DEPENDENCY_BY_REGION_BIT,
@@ -70,9 +69,9 @@ int main(int argc, char** argv) {
                     0, nullptr,
                     1, &barrier);
 
-            rasterizer->startPass(frame);
-            vkCmdDraw(frame.commandBuffer, 3, 1, 0, 0);
-            rasterizer->endPass(frame);
+            rasterizer.startPass(frame);
+            vkCmdDraw(frame.cmdBuffer, 3, 1, 0, 0);
+            rasterizer.endPass(frame);
 
 
             // Set the image back for ray tracing
@@ -80,7 +79,7 @@ int main(int argc, char** argv) {
                     imgStore.getStatic(lv::ImageID(1))->image,
                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
             vkCmdPipelineBarrier(
-                    frame.commandBuffer,
+                    frame.cmdBuffer,
                     VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                     VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                     VK_DEPENDENCY_BY_REGION_BIT,

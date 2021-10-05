@@ -3,7 +3,7 @@
 namespace lv {
 
 ImageStore::ImageStore(AppContext& ctx, ImageStoreInfo info) 
-   : AppExt<ImageStoreFrame>(ctx), info(info) {
+   : AppExt(ctx), info(info) {
     for(auto& pair : info.m_staticImageInfos) {
         auto& imageIdx = pair.first;
         auto& imageInfo = pair.second;
@@ -21,26 +21,27 @@ ImageStore::~ImageStore() {
     }
 }
 
-ImageStoreFrame* ImageStore::buildFrame(FrameContext& frame) {
-    auto ret = new ImageStoreFrame();
+void ImageStore::embellishFrameContext(FrameContext& frame) {
+    auto& imageFrame = frame.registerExtFrame<ImageStoreFrame>();
 
     for(auto& pair : info.m_imageInfos) {
         auto& imageIdx = pair.first;
         auto& imageInfo = pair.second;
 
-        Image img = createImage(frame.ctx, frame.swapchain.width, frame.swapchain.height, imageInfo);
-        ret->images.insert({imageIdx, img});
+        Image img = createImage(ctx, imageInfo.width(frame), imageInfo.height(frame), imageInfo);
+        imageFrame.images.insert({imageIdx, img});
     }
 
     for(auto& pair : info.m_staticImageInfos) {
         auto& imageIdx = pair.first;
-        ret->staticImages.insert({imageIdx, &staticImages[imageIdx]});
+        imageFrame.staticImages.insert({imageIdx, &staticImages[imageIdx]});
     }
-    return ret;
 }
 
-void ImageStore::destroyFrame(ImageStoreFrame* frame) {
-    for(auto& pair : frame->images) {
+void ImageStore::cleanupFrameContext(FrameContext& frame) {
+    auto& imageFrame = frame.getExtFrame<ImageStoreFrame>();
+
+    for(auto& pair : imageFrame.images) {
         auto& image = pair.second;
         vkDestroyImageView(ctx.vkDevice, image.view, nullptr);
         vmaDestroyImage(ctx.vmaAllocator, image.image, image.allocation);

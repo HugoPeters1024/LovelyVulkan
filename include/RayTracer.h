@@ -19,16 +19,15 @@ struct AccelerationStructure : public Buffer {
 
 template<>
 struct app_extensions<RayTracer> {
-    std::vector<const char*> operator()() const { 
-        return {
-            VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
-            VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
-            VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
-            VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
-            VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
-            VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME,
-            VK_KHR_SPIRV_1_4_EXTENSION_NAME,
-        }; 
+    void operator()(AppContextInfo& info) const { 
+        logger::debug("Enabling Vulkan RTX");
+        info.deviceExtensions.insert(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
+        info.deviceExtensions.insert(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME);
+        info.deviceExtensions.insert(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
+        info.deviceExtensions.insert(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
+        info.deviceExtensions.insert(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
+        info.deviceExtensions.insert(VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME);
+        info.deviceExtensions.insert(VK_KHR_SPIRV_1_4_EXTENSION_NAME);
     }
 };
 
@@ -49,7 +48,7 @@ struct TriangleData {
 };
 
 
-struct RayTracerFrame {
+struct RayTracerFrame : public FrameExt {
     VkDescriptorSet descriptorSet;
     Buffer cameraBuffer;
     VkSampler blueNoiseSampler;
@@ -60,14 +59,14 @@ struct RayTracerInfo {
     std::vector<const Mesh*> meshes;
 };
 
-class RayTracer : public AppExt<RayTracerFrame> {
+class RayTracer : public AppExt {
 public:
     RayTracer(AppContext& ctx, RayTracerInfo info);
     ~RayTracer();
 
+    void embellishFrameContext(FrameContext& frame) override;
+    void cleanupFrameContext(FrameContext& frame) override;
 
-    RayTracerFrame* buildFrame(FrameContext& frame) override;
-    void destroyFrame(RayTracerFrame* frame) override;
     void render(FrameContext& frame, const Camera& camera);
 
     inline void resetAccumulator() { shouldReset = true; tick = 0; }

@@ -1,7 +1,9 @@
 #pragma once
 #include "precomp.h"
 #include "AppContext.h"
+#include "AppExt.h"
 #include "ImageTools.h"
+#include "Window.h"
 
 namespace lv {
 
@@ -11,6 +13,8 @@ struct ImageInfo {
     VkFormat format;
     VkImageUsageFlags usage;
     VkImageLayout initialLayout;
+    FrameSelector<uint32_t> width;
+    FrameSelector<uint32_t> height;
 };
 
 
@@ -29,29 +33,29 @@ struct ImageStoreInfo {
     }
 };
 
-struct ImageStoreFrame {
+struct ImageStoreFrame : public FrameExt {
     std::unordered_map<ImageID, Image> images;
     std::unordered_map<ImageID, Image*> staticImages;
 
-    inline Image& get(ImageID slot) {
+    inline const Image& get(ImageID slot) const {
         assert(images.find(slot) != images.end() && "Image not registered before use");
-        return images[slot];
+        return images.at(slot);
     }
 
-    inline Image* getStatic(ImageID slot) {
+    inline const Image* getStatic(ImageID slot) const {
         assert(staticImages.find(slot) != staticImages.end() && "Image not registered before use");
-        return staticImages[slot];
+        return staticImages.at(slot);
     }
 };
 
 
-class ImageStore : public AppExt<ImageStoreFrame> {
+class ImageStore : public AppExt {
 public:
     ImageStore(AppContext& ctx, ImageStoreInfo info);
     ~ImageStore();
 
-    ImageStoreFrame* buildFrame(FrameContext& frame) override;
-    void destroyFrame(ImageStoreFrame* frame) override;
+    void embellishFrameContext(FrameContext& frame) override;
+    void cleanupFrameContext(FrameContext& frame) override;
 private:
     Image createImage(AppContext& ctx, uint32_t width, uint32_t height, ImageInfo& info);
     ImageStoreInfo info;

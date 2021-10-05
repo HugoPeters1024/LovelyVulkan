@@ -5,36 +5,26 @@
 
 namespace lv {
 
-Window::Window(AppContext& ctx, WindowInfo info) 
-    : ctx(ctx), info(info) {
+Window::Window(AppContext& ctx, WindowInfo info)
+    : FrameManager(ctx), info(info) {
     createWindow(info.windowName.c_str(), info.width, info.height);
     createSwapchain();
-    buildExtensionFrames();
+    createSyncObjects();
 }
 
 Window::~Window() {
-    vkDeviceWaitIdle(ctx.vkDevice);
-    for(auto& frame : swapchain.frameContexts) {
-        auto it = ctx.extensionOrder.rbegin();
-        while(it != ctx.extensionOrder.rend()) {
-            auto ext = ctx.extensions[*it];
-            ext->destroyDowncastedFrame(frame.getExtFrame(ext->frameType()));
-            it++;
-        }
-        vkDestroyImageView(ctx.vkDevice, frame.swapchain.vkView, nullptr);
+    for(auto& frame : frameContexts) {
+        auto& wFrame = frame.getExtFrame<WindowFrame>();
+        vkDestroyImageView(ctx.vkDevice, wFrame.vkView, nullptr);
     }
-
-    for(auto& sem : swapchain.imageAvailableSemaphores)
-        vkDestroySemaphore(ctx.vkDevice, sem, nullptr);
-
-    for(auto sem : swapchain.renderFinishedSemaphores)
-        vkDestroySemaphore(ctx.vkDevice, sem, nullptr);
-
-    for(auto fence : swapchain.inFlightFences)
-        vkDestroyFence(ctx.vkDevice, fence, nullptr);
-
     vkDestroySwapchainKHR(ctx.vkDevice, swapchain.vkSwapchain, nullptr);
     vkDestroySurfaceKHR(ctx.vkInstance, vkSurface, nullptr);
+    for(const auto& sem : swapchain.imageAvailableSemaphores) {
+        vkDestroySemaphore(ctx.vkDevice, sem, nullptr);
+    }
+    for(const auto& sem : swapchain.renderFinishedSemaphores) {
+        vkDestroySemaphore(ctx.vkDevice, sem, nullptr);
+    }
     glfwDestroyWindow(glfwWindow);
 }
 
@@ -75,7 +65,7 @@ void Window::createSwapchain() {
         .oldSwapchain = swapchain.vkSwapchain,
     };
 
-    uint32_t queueFamilyIndices[2] = { ctx.queueFamilies.graphics.value(), ctx.queueFamilies.present.value() }; 
+    uint32_t queueFamilyIndices[2] = { ctx.queueFamilies.graphics.value(), ctx.queueFamilies.present.value() };
 
     if (queueFamilyIndices[0] != queueFamilyIndices[1]) {
         createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
@@ -87,58 +77,43 @@ void Window::createSwapchain() {
 
     vkCheck(vkCreateSwapchainKHR(ctx.vkDevice, &createInfo, nullptr, &swapchain.vkSwapchain));
 
+    // Retrieve the images
     vkGetSwapchainImagesKHR(ctx.vkDevice, swapchain.vkSwapchain, &imageCount, nullptr);
-    VkImage images[imageCount];
-    vkGetSwapchainImagesKHR(ctx.vkDevice, swapchain.vkSwapchain, &imageCount, images);
-    swapchain.frameContexts = std::vector<FrameContext>(imageCount, {ctx});
-    for(uint32_t i=0; i<imageCount; i++) {
-        swapchain.frameContexts[i].swapchain.width = info.width;
-        swapchain.frameContexts[i].swapchain.height = info.height;
-        swapchain.frameContexts[i].swapchain.format = swapchain.surfaceFormat.format;
-        swapchain.frameContexts[i].swapchain.vkImage = images[i];
-    }
+    swapchain.images.resize(imageCount);
+    vkGetSwapchainImagesKHR(ctx.vkDevice, swapchain.vkSwapchain, &imageCount, swapchain.images.data());
 
-    // Create image views
-    for(uint32_t i=0; i<imageCount; i++) {
-        auto viewInfo = vks::initializers::imageViewCreateInfo(swapchain.frameContexts[i].swapchain.vkImage, swapchain.surfaceFormat.format, VK_IMAGE_ASPECT_COLOR_BIT);
-        vkCheck(vkCreateImageView(ctx.vkDevice, &viewInfo, nullptr, &swapchain.frameContexts[i].swapchain.vkView));
-    }
+    setNrFrames(imageCount);
+}
 
-    // Create sync objects
-    auto semInfo = vks::initializers::semaphoreCreateInfo();
-    auto fenceInfo = vks::initializers::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
+void Window::createSyncObjects() {
+    swapchain.imageAvailableSemaphores.resize(nrFramesInFlight);
+    swapchain.renderFinishedSemaphores.resize(nrFramesInFlight);
 
-    swapchain.imageAvailableSemaphores.resize(imageCount);
-    swapchain.renderFinishedSemaphores.resize(imageCount);
-    swapchain.inFlightFences.resize(imageCount);
-    for(uint32_t i=0; i<imageCount; i++) {
+    // Create the semaphores
+    for(uint32_t i=0; i<nrFramesInFlight; i++) {
+        auto semInfo = vks::initializers::semaphoreCreateInfo();
         vkCheck(vkCreateSemaphore(ctx.vkDevice, &semInfo, nullptr, &swapchain.imageAvailableSemaphores[i]));
         vkCheck(vkCreateSemaphore(ctx.vkDevice, &semInfo, nullptr, &swapchain.renderFinishedSemaphores[i]));
-        vkCheck(vkCreateFence(ctx.vkDevice, &fenceInfo, nullptr, &swapchain.inFlightFences[i]));
-    }
-    swapchain.imagesInFlight.resize(MAX_FRAMES_IN_FLIGHT, VK_NULL_HANDLE);
-
-    // create the command buffers
-    for(uint32_t i=0; i<imageCount; i++) {
-        auto& frame = swapchain.frameContexts[i];
-        auto allocInfo = vks::initializers::commandBufferAllocateInfo(ctx.vkCommandPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1);
-        vkCheck(vkAllocateCommandBuffers(ctx.vkDevice, &allocInfo, &frame.commandBuffer));
-    }
-
-    // Populate the circular fNext and fPrev pointers
-    for(int32_t i=0; i<imageCount; i++) {
-        swapchain.frameContexts[i].fNext = &swapchain.frameContexts[(i+1)%imageCount];
-        swapchain.frameContexts[i].fPrev = &swapchain.frameContexts[(i-1) < 0 ? imageCount-1 : i-1];
     }
 }
 
-void Window::buildExtensionFrames() {
-    for(auto& idx : ctx.extensionOrder) {
-        auto& ext = ctx.extensions[idx];
-        for(auto& frame : swapchain.frameContexts) {
-            frame.extensionFrame.insert({ext->frameType(), ext->buildDowncastedFrame(frame)});
-        }
-    }
+void Window::embellishFrameContext(FrameContext& frame) {
+    auto& windowFrame = frame.registerExtFrame<WindowFrame>();
+
+    windowFrame.width = info.width;
+    windowFrame.height = info.height;
+    windowFrame.format = swapchain.surfaceFormat.format;
+    windowFrame.vkImage = swapchain.images[frame.idx];
+
+    // Create image views
+    auto viewInfo = vks::initializers::imageViewCreateInfo(windowFrame.vkImage, swapchain.surfaceFormat.format, VK_IMAGE_ASPECT_COLOR_BIT);
+    vkCheck(vkCreateImageView(ctx.vkDevice, &viewInfo, nullptr, &windowFrame.vkView));
+
+}
+
+void Window::cleanupFrameContext(FrameContext &frame) {
+    auto& windowFrame = frame.registerExtFrame<WindowFrame>();
+    vkDestroyImageView(ctx.vkDevice, windowFrame.vkView, nullptr);
 }
 
 void Window::recreateSwapchain() {
@@ -219,60 +194,44 @@ bool Window::shouldClose() const {
     return glfwWindowShouldClose(glfwWindow);
 }
 
-void Window::nextFrame(std::function<void(FrameContext&)> callback) {
-
+uint32_t Window::acquireNextFrameIdx() {
     glfwPollEvents();
 
-    VkFence flightFence = swapchain.inFlightFences[swapchain.currentInFlight];
-    vkWaitForFences(ctx.vkDevice, 1, &flightFence, VK_TRUE, UINT64_MAX);
-    auto result = vkAcquireNextImageKHR(ctx.vkDevice, swapchain.vkSwapchain, UINT64_MAX, swapchain.imageAvailableSemaphores[swapchain.currentInFlight], VK_NULL_HANDLE, &swapchain.imageIdx);
+    auto result = vkAcquireNextImageKHR(ctx.vkDevice, swapchain.vkSwapchain, UINT64_MAX, swapchain.imageAvailableSemaphores[currentInFlight], VK_NULL_HANDLE, &swapchain.imageIdx);
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR) {
         recreateSwapchain();
-        return nextFrame(callback);
+        return acquireNextFrameIdx();
     } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
         logger::error("Failed to acquire swapchain image!");
         exit(1);
     }
 
+    return swapchain.imageIdx;
+}
 
-    FrameContext& frame = swapchain.frameContexts[swapchain.imageIdx];
-    vkCheck(vkResetCommandBuffer(frame.commandBuffer, 0));
-    auto beginInfo = vks::initializers::commandBufferBeginInfo();
-    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    vkCheck(vkBeginCommandBuffer(frame.commandBuffer, &beginInfo));
-
-    callback(frame);
-
-    vkEndCommandBuffer(frame.commandBuffer);
-
-    if (swapchain.imagesInFlight[swapchain.imageIdx] != VK_NULL_HANDLE) {
-        vkWaitForFences(ctx.vkDevice, 1, &swapchain.imagesInFlight[swapchain.currentInFlight], VK_TRUE, UINT64_MAX);
-    }
-    swapchain.imagesInFlight[swapchain.imageIdx] = swapchain.inFlightFences[swapchain.currentInFlight];
-
-    auto submitInfo = vks::initializers::submitInfo(&frame.commandBuffer);
+void Window::submitFrame(FrameContext& frame) {
+    auto& wFrame = frame.getExtFrame<WindowFrame>();
+    auto submitInfo = vks::initializers::submitInfo(&frame.cmdBuffer);
     submitInfo.waitSemaphoreCount = 1;
-    submitInfo.pWaitSemaphores = &swapchain.imageAvailableSemaphores[swapchain.currentInFlight];
+    submitInfo.pWaitSemaphores = &swapchain.imageAvailableSemaphores[currentInFlight];
     VkShaderStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     submitInfo.pWaitDstStageMask = &waitStage;
     submitInfo.signalSemaphoreCount = 1;
-    submitInfo.pSignalSemaphores = &swapchain.renderFinishedSemaphores[swapchain.currentInFlight];
+    submitInfo.pSignalSemaphores = &swapchain.renderFinishedSemaphores[currentInFlight];
 
-    vkCheck(vkResetFences(ctx.vkDevice, 1, &swapchain.inFlightFences[swapchain.currentInFlight]));
-    vkCheck(vkQueueSubmit(ctx.queues.graphics, 1, &submitInfo, swapchain.inFlightFences[swapchain.currentInFlight]));
+    vkCheck(vkQueueSubmit(ctx.queues.graphics, 1, &submitInfo, frame.frameFinished));
 
     VkPresentInfoKHR presentInfo {
             .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
             .waitSemaphoreCount = 1,
-            .pWaitSemaphores = &swapchain.renderFinishedSemaphores[swapchain.currentInFlight],
+            .pWaitSemaphores = &swapchain.renderFinishedSemaphores[currentInFlight],
             .swapchainCount = 1,
             .pSwapchains = &swapchain.vkSwapchain,
             .pImageIndices = &swapchain.imageIdx,
             .pResults = nullptr,
     };
 
-    swapchain.currentInFlight = (swapchain.currentInFlight + 1) % MAX_FRAMES_IN_FLIGHT;
     vkCheck(vkQueuePresentKHR(ctx.queues.present, &presentInfo));
 }
 
