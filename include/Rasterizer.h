@@ -52,6 +52,8 @@ public:
     void startPass(FrameContext& frame) const;
     void endPass(FrameContext& frame) const;
 
+    VkRenderPass getRenderPass() const { return renderPass; }
+
 private:
     void createRenderPass();
     void createDescriptorSetLayout();

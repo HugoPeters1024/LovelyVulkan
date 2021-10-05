@@ -115,4 +115,7 @@ private:
     void createDescriptorPool();
 };
 
+template<typename T>
+using AppContextSelector = std::function<T(AppContext& ctx)>;
+
 };

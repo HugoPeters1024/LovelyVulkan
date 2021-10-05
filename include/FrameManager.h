@@ -1,3 +1,4 @@
+#pragma once
 #include "precomp.h"
 #include "AppContext.h"
 #include "AppExt.h"
@@ -45,6 +46,7 @@ public:
 
     void init(const std::vector<AppExt*>& extensions);
     void nextFrame(const std::function<void(FrameContext&)>& callback);
+    uint32_t getNrFrames() const { return frameContexts.size(); }
 protected:
     FrameContext& getCurrentFrame() { return frameContexts[frameIdx]; }
 

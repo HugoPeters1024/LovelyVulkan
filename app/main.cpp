@@ -9,6 +9,7 @@ int main(int argc, char** argv) {
     info.registerExtension<lv::ImageStore>();
     info.registerExtension<lv::RayTracer>();
     info.registerExtension<lv::Rasterizer>();
+    info.registerExtension<lv::Overlay>();
     lv::AppContext ctx(info);
 
 
@@ -36,6 +37,12 @@ int main(int argc, char** argv) {
     auto& window = ctx.addFrameManager<lv::Window>(ctx, windowInfo);
 
     lv::Camera camera{window.getGLFWwindow()};
+
+    lv::OverlayInfo overlayInfo{};
+    overlayInfo.frameManager = &window;
+    overlayInfo.glfwWindow = window.getGLFWwindow();
+    overlayInfo.renderPass = rasterizer.getRenderPass();
+    auto& overlay = ctx.addExtension<lv::Overlay>(ctx, overlayInfo);
 
     uint32_t tick = 0;
     double ping = glfwGetTime();
@@ -71,6 +78,7 @@ int main(int argc, char** argv) {
 
             rasterizer.startPass(frame);
             vkCmdDraw(frame.cmdBuffer, 3, 1, 0, 0);
+            overlay.render(frame);
             rasterizer.endPass(frame);
 
 
