@@ -69,7 +69,7 @@ void RayTracer::embellishFrameContext(FrameContext& frame) {
     writeAS.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
 
     VkDescriptorImageInfo imageDescriptorInfo{};
-    imageDescriptorInfo.imageView = frame.getExtFrame<lv::ImageStoreFrame>().getStatic(lv::ImageID(1))->view;
+    imageDescriptorInfo.imageView = frame.getExtFrame<lv::ResourceFrame>().getStatic(1)->view;
     imageDescriptorInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
     auto imageWrite = vks::initializers::writeDescriptorSet(ret.descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, &imageDescriptorInfo);
 

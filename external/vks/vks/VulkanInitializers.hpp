@@ -422,6 +422,7 @@ namespace vks
 			return pipelineLayoutCreateInfo;
 		}
 
+
 		inline VkDescriptorSetAllocateInfo descriptorSetAllocateInfo(
 			VkDescriptorPool descriptorPool,
 			const VkDescriptorSetLayout* pSetLayouts,
@@ -435,6 +436,13 @@ namespace vks
 			return descriptorSetAllocateInfo;
 		}
 
+		inline VkDescriptorSetAllocateInfo descriptorSetAllocateInfo(
+			VkDescriptorPool descriptorPool,
+			const std::vector<VkDescriptorSetLayout>& pSetLayouts)
+		{
+            return descriptorSetAllocateInfo(descriptorPool, pSetLayouts.data(), pSetLayouts.size());
+		}
+
 		inline VkDescriptorImageInfo descriptorImageInfo(VkSampler sampler, VkImageView imageView, VkImageLayout imageLayout)
 		{
 			VkDescriptorImageInfo descriptorImageInfo {};
@@ -442,6 +450,15 @@ namespace vks
 			descriptorImageInfo.imageView = imageView;
 			descriptorImageInfo.imageLayout = imageLayout;
 			return descriptorImageInfo;
+		}
+
+		inline VkDescriptorBufferInfo descriptorBufferInfo(VkBuffer buffer)
+		{
+			VkDescriptorBufferInfo descriptorBufferInfo {};
+            descriptorBufferInfo.buffer = buffer;
+            descriptorBufferInfo.offset = 0;
+            descriptorBufferInfo.range = VK_WHOLE_SIZE;
+			return descriptorBufferInfo;
 		}
 
 		inline VkWriteDescriptorSet writeDescriptorSet(

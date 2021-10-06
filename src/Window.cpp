@@ -1,8 +1,6 @@
 #include "Window.h"
 #include "AppContext.h"
 
-#define MAX_FRAMES_IN_FLIGHT 3
-
 namespace lv {
 
 Window::Window(AppContext& ctx, WindowInfo info)

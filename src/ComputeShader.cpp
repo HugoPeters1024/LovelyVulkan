@@ -20,15 +20,16 @@ void ComputeShader::createDescriptorSetLayout() {
     logger::debug("Creating descriptor set");
     std::vector<VkDescriptorSetLayoutBinding> bindings;
     for(auto& pair : info.bindingSet) {
-        uint32_t binding = pair.first;
+        auto& binding = pair.second;
+
         VkDescriptorType descriptorType;
-        switch(pair.second) {
+        switch(binding.type) {
             case ResourceType::Image: descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE; break;
             case ResourceType::Buffer: descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; break;
         }
 
         bindings.push_back(VkDescriptorSetLayoutBinding {
-            .binding = binding,
+            .binding = binding.binding,
             .descriptorType = descriptorType,
             .descriptorCount = 1,
             .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
@@ -74,29 +75,31 @@ void ComputeShader::createPipeline() {
     vkDestroyShaderModule(ctx.vkDevice, module, nullptr);
 }
 
-void ComputeShader::buildFrame(FrameContext& frame, ComputeFrame& ret) const {
-    logger::debug("Comp frame being build");
+void ComputeShader::embellishFrameContext(FrameContext& frame) {
+    auto& ret = frame.registerExtFrame<ComputeFrame>();
 
-    ret.descriptorSets.resize(info.descriptorSelectorsTable.size());
-    std::vector<VkDescriptorSetLayout> layouts(info.descriptorSelectorsTable.size(), descriptorSetLayout);
-    auto allocInfo = vks::initializers::descriptorSetAllocateInfo(ctx.vkDescriptorPool, layouts.data(), info.descriptorSelectorsTable.size());
-    vkCheck(vkAllocateDescriptorSets(ctx.vkDevice, &allocInfo, ret.descriptorSets.data()));
+    std::vector<VkDescriptorSetLayout> layouts { descriptorSetLayout };
+    auto allocInfo = vks::initializers::descriptorSetAllocateInfo(ctx.vkDescriptorPool, layouts);
+    vkCheck(vkAllocateDescriptorSets(ctx.vkDevice, &allocInfo, &ret.descriptorSet));
 
-    for(const auto& descriptors : info.descriptorSelectorsTable) {
-        auto& descriptorIdx = descriptors.first;
-        auto& descriptorSelectors = descriptors.second;
-        for(const auto& descriptorSelector : descriptorSelectors) {
-            if (descriptorSelector.type == ResourceType::Image) {
-                // TODO: make sure that the imageInfos are sorted by binding
-                VkImageView imageView = *reinterpret_cast<VkImageView*>(descriptorSelector.selector(frame));
-                auto imageInfo = vks::initializers::descriptorImageInfo(nullptr, imageView, VK_IMAGE_LAYOUT_GENERAL);
-                auto writeInfo = vks::initializers::writeDescriptorSet(ret.descriptorSets[descriptorIdx], VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, descriptorSelector.binding, &imageInfo);
-                vkUpdateDescriptorSets(frame.ctx.vkDevice, 1, &writeInfo, 0, nullptr);
-            } else {
-                throw std::runtime_error("Not implemented");
-            }
+    for(const auto& pair : info.bindingSet) {
+        auto& binding = pair.second;
+        if (binding.type == ResourceType::Image) {
+            // TODO: make sure that the imageInfos are sorted by binding
+            VkImageView imageView = binding.viewSelector(frame);
+            auto imageInfo = vks::initializers::descriptorImageInfo(nullptr, imageView, VK_IMAGE_LAYOUT_GENERAL);
+            auto writeInfo = vks::initializers::writeDescriptorSet(ret.descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, binding.binding, &imageInfo);
+            vkUpdateDescriptorSets(frame.ctx.vkDevice, 1, &writeInfo, 0, nullptr);
+        } else {
+            VkBuffer buffer = binding.bufferSelector(frame);
+            auto bufferInfo = vks::initializers::descriptorBufferInfo(buffer);
+            auto writeInfo = vks::initializers::writeDescriptorSet(ret.descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, binding.binding, &bufferInfo);
+            vkUpdateDescriptorSets(frame.ctx.vkDevice, 1, &writeInfo, 0, nullptr);
         }
-        //vkUpdateDescriptorSets(frame.ctx.vkDevice, writes.size(), writes.data(), 0, nullptr);
     }
 }
+
+void ComputeShader::cleanupFrameContext(FrameContext& frame) {
+}
+
 }

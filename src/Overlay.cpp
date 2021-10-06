@@ -64,13 +64,13 @@ void Overlay::initImgui() {
      ImGui_ImplVulkan_DestroyFontUploadObjects();
 }
 
-void Overlay::render(FrameContext& frame) {
+void Overlay::render(FrameContext& frame, float energy) {
     ImGui_ImplVulkanH_Frame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
     if (ImGui::Begin("test")) {
-        ImGui::Text("Major Sucess");
+        ImGui::Text("Energy %f", energy);
     }
     ImGui::End();
     ImGui::Render();

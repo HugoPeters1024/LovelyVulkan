@@ -16,7 +16,7 @@ public:
     Overlay(AppContext& ctx, OverlayInfo info);
     ~Overlay();
 
-    void render(FrameContext& frameContext);
+    void render(FrameContext& frameContext, float energy);
 
 private:
     void createDescriptorPool();

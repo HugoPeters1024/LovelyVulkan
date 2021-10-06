@@ -20,7 +20,7 @@ FrameManager::~FrameManager() {
 void FrameManager::init(const std::vector<AppExt*>& extensions) {
     assert(frameContexts.empty() && "Already initialized");
     this->extensions = extensions;
-    logger::debug("Frame Manager initializing with {} frames and {} extensions", nrFrames, extensions.size());
+    logger::debug("Frame Manager initializing with {} frames ({} in flight) and {} extensions", nrFrames, nrFramesInFlight, extensions.size());
 
     // Create the frame contexts
     for(uint32_t i = 0; i<nrFrames; i++) {
@@ -43,6 +43,11 @@ void FrameManager::init(const std::vector<AppExt*>& extensions) {
 
         frameContexts.push_back(frame);
     }
+
+    for(uint32_t i=0; i<nrFrames; i++) {
+        frameContexts[i].fPrev = &frameContexts[(i-1+nrFrames)%nrFrames];
+    }
+
 
     // Create the in flight fences
     auto fenceInfo = vks::initializers::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);

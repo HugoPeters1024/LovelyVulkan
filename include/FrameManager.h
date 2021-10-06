@@ -11,6 +11,7 @@ public:
     uint32_t idx;
     VkCommandBuffer cmdBuffer;
     VkFence frameFinished;
+    FrameContext* fPrev;
 
     FrameContext(AppContext& ctx) : ctx(ctx) {}
 

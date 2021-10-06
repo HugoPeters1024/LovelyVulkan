@@ -11,9 +11,9 @@ struct TriangleData {
     vec4 normals[3];
 };
 
-layout(binding = 3, set = 0) buffer Indices { uint i[]; } indices;
-layout(binding = 4, set = 0) buffer Vertices { Vertex v[]; } vertices;
-layout(binding = 5, set = 0) buffer TriangleDatas { TriangleData td[]; } triangleData;
+layout(binding = 3, set = 0) readonly buffer Indices { uint i[]; } indices;
+layout(binding = 4, set = 0) readonly buffer Vertices { Vertex v[]; } vertices;
+layout(binding = 5, set = 0) readonly buffer TriangleDatas { TriangleData td[]; } triangleData;
 
 layout(location = 0) rayPayloadInEXT Payload {
     vec3 normal;

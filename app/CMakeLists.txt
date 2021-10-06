@@ -13,6 +13,7 @@ macro(shader)
 endmacro()
 
 shader("test.comp")
+shader("sumImage.comp")
 shader("quad.vert")
 shader("quad.frag")
 shader("raygen.rgen")

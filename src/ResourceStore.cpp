@@ -1,8 +1,8 @@
-#include "ImageStore.h"
+#include "ResourceStore.h"
 
 namespace lv {
 
-ImageStore::ImageStore(AppContext& ctx, ImageStoreInfo info) 
+ResourceStore::ResourceStore(AppContext& ctx, ResourceStoreInfo info) 
    : AppExt(ctx), info(info) {
     for(auto& pair : info.m_staticImageInfos) {
         auto& imageIdx = pair.first;
@@ -14,41 +14,56 @@ ImageStore::ImageStore(AppContext& ctx, ImageStoreInfo info)
     }
 }
 
-ImageStore::~ImageStore() {
+ResourceStore::~ResourceStore() {
     for(const auto& pair : staticImages) {
         vkDestroyImageView(ctx.vkDevice, pair.second.view, nullptr);
         vmaDestroyImage(ctx.vmaAllocator, pair.second.image, pair.second.allocation);
     }
 }
 
-void ImageStore::embellishFrameContext(FrameContext& frame) {
-    auto& imageFrame = frame.registerExtFrame<ImageStoreFrame>();
+void ResourceStore::embellishFrameContext(FrameContext& frame) {
+    auto& rFrame = frame.registerExtFrame<ResourceFrame>();
 
     for(auto& pair : info.m_imageInfos) {
         auto& imageIdx = pair.first;
         auto& imageInfo = pair.second;
 
         Image img = createImage(ctx, imageInfo.width(frame), imageInfo.height(frame), imageInfo);
-        imageFrame.images.insert({imageIdx, img});
+        rFrame.images.insert({imageIdx, img});
     }
 
     for(auto& pair : info.m_staticImageInfos) {
         auto& imageIdx = pair.first;
-        imageFrame.staticImages.insert({imageIdx, &staticImages[imageIdx]});
+        rFrame.staticImages.insert({imageIdx, &staticImages[imageIdx]});
+    }
+
+    for(auto& pair : info.m_bufferInfos) {
+        auto& bufferIdx = pair.first;
+        auto& bufferInfo = pair.second;
+        MappedBuffer buf;
+        buffertools::create_buffer_H2D(ctx, bufferInfo.usage, bufferInfo.size, &buf);
+        vkCheck(vmaMapMemory(ctx.vmaAllocator, buf.memory, &buf.data));
+        rFrame.buffers.insert({bufferIdx, buf});
     }
 }
 
-void ImageStore::cleanupFrameContext(FrameContext& frame) {
-    auto& imageFrame = frame.getExtFrame<ImageStoreFrame>();
+void ResourceStore::cleanupFrameContext(FrameContext& frame) {
+    auto& rFrame = frame.getExtFrame<ResourceFrame>();
 
-    for(auto& pair : imageFrame.images) {
+    for(auto& pair : rFrame.buffers) {
+        auto& buffer = pair.second;
+        vmaUnmapMemory(ctx.vmaAllocator, buffer.memory);
+        buffertools::destroyBuffer(ctx, buffer);
+    }
+
+    for(auto& pair : rFrame.images) {
         auto& image = pair.second;
         vkDestroyImageView(ctx.vkDevice, image.view, nullptr);
         vmaDestroyImage(ctx.vmaAllocator, image.image, image.allocation);
     }
 }
 
-Image ImageStore::createImage(AppContext& ctx, uint32_t width, uint32_t height, ImageInfo& info) {
+Image ResourceStore::createImage(AppContext& ctx, uint32_t width, uint32_t height, ImageInfo& info) {
     Image ret{};
     ret.format = info.format;
     auto imageCreateInfo = vks::initializers::imageCreateInfo(width, height, info.format, info.usage);

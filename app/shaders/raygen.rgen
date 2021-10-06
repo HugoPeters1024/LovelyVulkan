@@ -69,7 +69,7 @@ vec3 getSample(inout uint seed) {
     vec3 accucolor = vec3(0);
     vec3 mask = vec3(1);
 
-    for(int rec=0; rec<8; rec++) {
+    for(int rec=0; rec<16; rec++) {
         float tmin = 0.001f;
         float tmax = 1000.0f;
         traceRayEXT(topLevelAS, gl_RayFlagsOpaqueEXT, 0xff, 0, 0, 0, origin, tmin, direction, tmax, 0);
@@ -93,7 +93,6 @@ vec3 getSample(inout uint seed) {
         } else {
             break;
         }
-
 
 
         // Trace the shadow ray

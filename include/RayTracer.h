@@ -3,10 +3,11 @@
 #include "AppContext.h"
 #include "AppExt.h"
 #include "BufferTools.h"
-#include "ImageStore.h"
 #include "ImageTools.h"
+#include "ResourceStore.h"
 #include "Camera.h"
 #include "Mesh.h"
+#include "Window.h"
 
 namespace lv {
 

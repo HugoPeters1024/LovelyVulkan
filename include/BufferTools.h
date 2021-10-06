@@ -1,3 +1,4 @@
+#pragma once
 #include "precomp.h"
 #include "AppContext.h"
 
@@ -6,6 +7,13 @@ namespace lv {
 struct Buffer {
     VkBuffer buffer;
     VmaAllocation memory;
+};
+
+struct MappedBuffer : public Buffer {
+    void* data;
+
+    template<typename T>
+    inline T* getData() { return reinterpret_cast<T*>(data); }
 };
 
 namespace buffertools {

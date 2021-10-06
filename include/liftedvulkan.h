@@ -7,7 +7,7 @@
 #include "ComputeShader.h"
 #include "Rasterizer.h"
 #include "RayTracer.h"
-#include "ImageStore.h"
+#include "ResourceStore.h"
 #include "Overlay.h"
 #include "Camera.h"
 

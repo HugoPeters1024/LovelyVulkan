@@ -11,10 +11,11 @@ public:
     glm::vec3 getViewDir() const;
     glm::mat4 getViewMatrix() const;
     inline bool getHasMoved() const { return hasMoved; }
-private:
-    GLFWwindow* window;
+
     glm::vec3 eye;
     float theta, phi;
+private:
+    GLFWwindow* window;
     bool hasMoved = false;
 };
 

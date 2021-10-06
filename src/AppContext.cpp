@@ -212,6 +212,7 @@ void AppContext::createLogicalDevice() {
 
     VkPhysicalDeviceFeatures deviceFeatures{
         .samplerAnisotropy = VK_TRUE,
+        .fragmentStoresAndAtomics = VK_TRUE,
     };
 
     VkPhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingPipelineFeatures {
@@ -231,6 +232,13 @@ void AppContext::createLogicalDevice() {
         .bufferDeviceAddress = VK_TRUE,
     };
 
+    VkPhysicalDeviceShaderAtomicFloatFeaturesEXT enabledAtomicsFeatures {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT,
+        .pNext = &enabledBufferDevicesAddressFeatures,
+        .shaderBufferFloat32AtomicAdd = VK_TRUE,
+    };
+
+
 
     std::vector<const char*> devicesExtensions(info.deviceExtensions.begin(), info.deviceExtensions.end());
     if (!deviceExtensionsSupported(vkPhysicalDevice, info.deviceExtensions)) {
@@ -240,7 +248,7 @@ void AppContext::createLogicalDevice() {
 
     VkDeviceCreateInfo createInfo {
         .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-        .pNext = &enabledBufferDevicesAddressFeatures,
+        .pNext = &enabledAtomicsFeatures,
         .queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size()),
         .pQueueCreateInfos = queueCreateInfos.data(),
         .enabledExtensionCount = static_cast<uint32_t>(devicesExtensions.size()),
