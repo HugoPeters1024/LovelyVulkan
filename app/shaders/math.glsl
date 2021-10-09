@@ -38,6 +38,11 @@ vec3 SampleHemisphereCosine(in vec3 normal, in float u1, in float u2)
             dot(s, vec3(u.z, v.z, w.z))));
 }
 
+// Special version of sign that never returns 0
+float sign_(in float x) {
+    return uintBitsToFloat(floatBitsToUint(sign(x)) | 0x3f800000);
+}
+
 
 vec3 SampleHemisphereCosine(in vec3 normal, inout uint seed)
 {
