@@ -55,18 +55,16 @@ int main(int argc, char** argv) {
 
     uint32_t tick = 0;
     double ping = glfwGetTime();
+    float fps = 0.0f;
     while(!window.shouldClose()) {
-        float dt = glfwGetTime() - ping;
-        ping = glfwGetTime();
-
-        if (tick++ % 100 == 0) {
-            logger::debug("fps: {}", 1.0f / dt);
-        }
 
         window.nextFrame([&](lv::FrameContext& frame) {
             auto& imgStore = frame.getExtFrame<lv::ResourceFrame>();
             auto& rastFrame = frame.getExtFrame<lv::RasterizerFrame>();
             auto& sumImageFrame = frame.getExtFrame<lv::ComputeFrame>();
+
+            float dt = glfwGetTime() - ping;
+            ping = glfwGetTime();
 
             imgStore.getBuffer(0).getData<float>()[0] = 0;
 
@@ -78,7 +76,7 @@ int main(int argc, char** argv) {
             // Collect info about the amount of energy
             vkCmdBindPipeline(frame.cmdBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, sumImage.pipeline);
             vkCmdBindDescriptorSets(frame.cmdBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, sumImage.pipelineLayout, 0, 1, &sumImageFrame.descriptorSet, 0, nullptr);
-            vkCmdDispatch(frame.cmdBuffer, 16, 16, 1);
+            vkCmdDispatch(frame.cmdBuffer, WINDOW_WIDTH / 64, WINDOW_HEIGHT / 64, 1);
 
             // Prepare the image to be sampled when rendering to the screen
             auto barrier = vks::initializers::imageMemoryBarrier(
@@ -95,7 +93,9 @@ int main(int argc, char** argv) {
 
             rasterizer.startPass(frame);
             vkCmdDraw(frame.cmdBuffer, 3, 1, 0, 0);
-            overlay.render(frame, *frame.fPrev->getExtFrame<lv::ResourceFrame>().getBuffer(0).getData<float>());
+
+            fps = 0.9f * fps + 0.1f * (1.0f / dt);
+            overlay.render(frame, *frame.fPrev->getExtFrame<lv::ResourceFrame>().getBuffer(0).getData<float>(), fps);
             rasterizer.endPass(frame);
 
 

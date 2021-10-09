@@ -27,6 +27,7 @@ layout(location = 0) rayPayloadEXT Payload {
     float d;
     vec3 emission;
     uint customIndex;
+    vec3 direction;
 } payload;
 
 
@@ -62,9 +63,9 @@ vec3 getSample(inout uint seed) {
 
     vec3 origin = (cam.viewInverse * vec4(0,0,0,1)).xyz;
     vec3 target = (cam.projInverse * vec4(d.x, d.y,1,1)).xyz;
-    vec3 direction = (cam.viewInverse * vec4(normalize(target), 0)).xyz;
 
     initPayload();
+    payload.direction = normalize((cam.viewInverse * vec4(target, 0)).xyz);
 
     vec3 accucolor = vec3(0);
     vec3 mask = vec3(1);
@@ -72,7 +73,7 @@ vec3 getSample(inout uint seed) {
     const float tmax = 1000.0f;
 
     for(int rec=0; rec<16; rec++) {
-        traceRayEXT(topLevelAS, gl_RayFlagsOpaqueEXT, 0xff, 0, 0, 0, origin, tmin, direction, tmax, 0);
+        traceRayEXT(topLevelAS, gl_RayFlagsOpaqueEXT, 0xff, 0, 0, 0, origin, tmin, payload.direction, tmax, 0);
 
         if (dot(payload.emission, payload.emission) > 0) {
             accucolor += mask * payload.emission;
@@ -80,18 +81,20 @@ vec3 getSample(inout uint seed) {
         }
 
         if (!payload.hit) break;
-        payload.normal *= sign_(-dot(payload.normal, direction));
+        payload.normal *= sign_(-dot(payload.normal, payload.direction));
 
-        origin = origin + payload.d * direction + 0.0001f * payload.normal;
-        direction = SampleHemisphereCosine(payload.normal, rand(seed), rand(seed));
+        origin = origin + payload.d * payload.direction + 0.0001f * payload.normal;
+        payload.direction = SampleHemisphereCosine(payload.normal, rand(seed), rand(seed));
         mask *= payload.materialColor;
 
         // Russian roulette
-        float russianP = clamp(max3(payload.materialColor), 0.1f, 0.9f);
-        if (rand(seed) < russianP) {
-            mask /= russianP;
-        } else {
-            break;
+        if (!getShouldReset()) {
+            const float russianP = clamp(max3(payload.materialColor), 0.1f, 0.9f);
+            if (rand(seed) < russianP) {
+                mask /= russianP;
+            } else {
+                break;
+            }
         }
 
 
@@ -122,9 +125,10 @@ void main() {
     uint seed = getSeed();
     vec3 s = vec3(0);
 
-    for(int i=0; i<15; i++)
+    uint sampleCount = getShouldReset() ? 1 : 10;
+    for(int i=0; i<sampleCount; i++)
         s += getSample(seed);
-    s /= 15.0f;
+    s /= float(sampleCount);
     vec4 oldColor = getShouldReset() ? vec4(0) : imageLoad(image, ivec2(gl_LaunchIDEXT.xy));
     imageStore(image, ivec2(gl_LaunchIDEXT.xy), oldColor + vec4(s, 1));
 }

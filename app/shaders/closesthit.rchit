@@ -22,6 +22,7 @@ layout(location = 0) rayPayloadInEXT Payload {
     float d;
     vec3 emission;
     uint customIndex;
+    vec3 direction;
 } payload;
 
 hitAttributeEXT vec3 attribs;
@@ -40,8 +41,8 @@ vec3 hsv2rgb(vec3 c) {
 
 void main() {
     const vec3 barycentricCoords = vec3(1.0f - attribs.x - attribs.y, attribs.x, attribs.y);
-    payload.emission = (gl_InstanceCustomIndexEXT > 0) ? 10 * vec3(1, 1, 1) : vec3(0);
-    payload.materialColor = vec3(0.3f);
+    payload.emission = (gl_InstanceCustomIndexEXT > 0) ? 5 * vec3(1, 1, 1) : vec3(0);
+    payload.materialColor = vec3(0.4f);
     payload.normal = getNormal();
     payload.d = gl_RayTmaxEXT;
     payload.hit = true;

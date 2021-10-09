@@ -70,7 +70,7 @@ public:
 
     void render(FrameContext& frame, const Camera& camera);
 
-    inline void resetAccumulator() { shouldReset = true; tick = 0; }
+    inline void resetAccumulator() { shouldReset = true; }
 
 	PFN_vkGetBufferDeviceAddressKHR vkGetBufferDeviceAddressKHR;
 	PFN_vkCreateAccelerationStructureKHR vkCreateAccelerationStructureKHR;

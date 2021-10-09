@@ -7,7 +7,7 @@ layout(binding = 1, rgba32f) uniform readonly image2D imageSrc;
 
 void main() {
     ivec2 loc = ivec2(gl_GlobalInvocationID.xy);
-    vec4 s = imageLoad(imageSrc, loc);
+    vec4 s = imageLoad(imageSrc, loc * 4);
     float toAdd = dot(vec3(1), s.xyz / s.w);
     atomicAdd(energy, toAdd);
 }
