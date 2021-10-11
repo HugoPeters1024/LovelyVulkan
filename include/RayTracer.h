@@ -45,7 +45,7 @@ struct RayTracerCamera {
 };
 
 struct TriangleData {
-    glm::vec4 normals[3];
+    glm::vec4 vertices[3];
 };
 
 

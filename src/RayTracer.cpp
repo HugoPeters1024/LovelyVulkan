@@ -263,9 +263,9 @@ void RayTracer::createBottomLevelAccelerationStructures() {
         assert(model->normals.size() == model->indices.size());
         for(uint32_t i=0; i<model->indices.size(); i+=3) {
             TriangleData triangleData{};
-            triangleData.normals[0] = glm::vec4(model->normals[i+0],0);
-            triangleData.normals[1] = glm::vec4(model->normals[i+1],0);
-            triangleData.normals[2] = glm::vec4(model->normals[i+2],0);
+            triangleData.vertices[0] = model->vertices[model->indices[i+0]].v;
+            triangleData.vertices[1] = model->vertices[model->indices[i+1]].v;
+            triangleData.vertices[2] = model->vertices[model->indices[i+2]].v;
             allTriangleData[indexBufferOffset/3 + i/3] = triangleData;
         }
         vertexBufferOffset += model->vertices.size();

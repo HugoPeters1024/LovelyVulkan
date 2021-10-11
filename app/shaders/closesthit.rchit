@@ -8,12 +8,12 @@ struct Vertex {
 };
 
 struct TriangleData {
-    vec4 normals[3];
+    vec4 vs[3];
 };
 
 layout(binding = 3, set = 0) readonly buffer Indices { uint i[]; } indices;
 layout(binding = 4, set = 0) readonly buffer Vertices { Vertex v[]; } vertices;
-layout(binding = 5, set = 0) readonly buffer TriangleDatas { TriangleData td[]; } triangleData;
+layout(binding = 5, set = 0) readonly buffer TriangleDatas { TriangleData triangleData[]; };
 
 layout(location = 0) rayPayloadInEXT Payload {
     vec3 normal;
@@ -28,8 +28,13 @@ layout(location = 0) rayPayloadInEXT Payload {
 hitAttributeEXT vec3 attribs;
 
 vec3 getNormal() {
-    const TriangleData td = triangleData.td[gl_PrimitiveID + gl_InstanceCustomIndexEXT];
-    return td.normals[0].xyz * (1.0f - attribs.x - attribs.y) + td.normals[1].xyz * attribs.x + td.normals[2].xyz * attribs.y;
+    const TriangleData td = triangleData[gl_PrimitiveID + gl_InstanceCustomIndexEXT];
+    const vec3 v0 = td.vs[0].xyz;
+    const vec3 v1 = td.vs[1].xyz;
+    const vec3 v2 = td.vs[2].xyz;
+    const vec3 v0v1 = v1 - v0;
+    const vec3 v0v2 = v2 - v0;
+    return normalize(cross(v0v1, v0v2));
 }
 
 vec3 hsv2rgb(vec3 c) {
