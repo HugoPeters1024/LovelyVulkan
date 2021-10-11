@@ -13,7 +13,7 @@ layout(binding = 2, set = 0) uniform CameraProperties
     vec4 viewDir;
     vec4 properties0;
 } cam;
-layout(binding = 8, set = 0) uniform sampler2D blueNoise;
+layout(binding = 6, set = 0) readonly buffer EmissiveTriangles { uint emissiveTriangles[]; };
 
 float getTime() { return cam.properties0.x; }
 uint getTick() { return floatBitsToUint(cam.properties0.y); }
@@ -40,19 +40,6 @@ void initPayload() {
 
 uint getSeed() {
     return wang_hash(wang_hash(gl_LaunchIDEXT.x + gl_LaunchSizeEXT.x * gl_LaunchIDEXT.y) + getTick());
-}
-
-// TODO broken (not statiscally sound)
-float randBlue(inout uint seed) {
-    uint blueCalls = 0;
-    if (getTick() < 1) {
-        seed = rand_xorshift(seed + getTick());
-        vec2 sampleLoc = vec2(4 * gl_LaunchIDEXT.xy + uvec2(seed % 239, seed % 23)) / gl_LaunchSizeEXT.x;
-        blueCalls++;
-        return texture(blueNoise, sampleLoc).r;
-    } else {
-        return rand(seed);
-    }
 }
 
 vec3 getSample(inout uint seed) {
@@ -125,10 +112,14 @@ void main() {
     uint seed = getSeed();
     vec3 s = vec3(0);
 
-    uint sampleCount = getShouldReset() ? 1 : 10;
+    uint sampleCount = getShouldReset() ? 1 : 30;
     for(int i=0; i<sampleCount; i++)
         s += getSample(seed);
     s /= float(sampleCount);
+
+    if (emissiveTriangles[0] != 1) {
+        s = vec3(1,0,0);
+    }
     vec4 oldColor = getShouldReset() ? vec4(0) : imageLoad(image, ivec2(gl_LaunchIDEXT.xy));
     imageStore(image, ivec2(gl_LaunchIDEXT.xy), oldColor + vec4(s, 1));
 }

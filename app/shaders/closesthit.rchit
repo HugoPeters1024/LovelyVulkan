@@ -11,6 +11,8 @@ struct TriangleData {
     vec4 vs[3];
 };
 
+uint primitiveId() { return gl_PrimitiveID + gl_InstanceCustomIndexEXT; }
+
 layout(binding = 3, set = 0) readonly buffer Indices { uint i[]; } indices;
 layout(binding = 4, set = 0) readonly buffer Vertices { Vertex v[]; } vertices;
 layout(binding = 5, set = 0) readonly buffer TriangleDatas { TriangleData triangleData[]; };
@@ -28,13 +30,18 @@ layout(location = 0) rayPayloadInEXT Payload {
 hitAttributeEXT vec3 attribs;
 
 vec3 getNormal() {
-    const TriangleData td = triangleData[gl_PrimitiveID + gl_InstanceCustomIndexEXT];
+    const TriangleData td = triangleData[primitiveId()];
     const vec3 v0 = td.vs[0].xyz;
     const vec3 v1 = td.vs[1].xyz;
     const vec3 v2 = td.vs[2].xyz;
     const vec3 v0v1 = v1 - v0;
     const vec3 v0v2 = v2 - v0;
     return normalize(cross(v0v1, v0v2));
+}
+
+vec3 getEmission() {
+    const TriangleData td = triangleData[primitiveId()];
+    return vec3(td.vs[0].w, td.vs[1].w, td.vs[2].w);
 }
 
 vec3 hsv2rgb(vec3 c) {
@@ -46,7 +53,7 @@ vec3 hsv2rgb(vec3 c) {
 
 void main() {
     const vec3 barycentricCoords = vec3(1.0f - attribs.x - attribs.y, attribs.x, attribs.y);
-    payload.emission = (gl_InstanceCustomIndexEXT > 0) ? 5 * vec3(1, 1, 1) : vec3(0);
+    payload.emission = getEmission();
     payload.materialColor = vec3(0.4f);
     payload.normal = getNormal();
     payload.d = gl_RayTmaxEXT;

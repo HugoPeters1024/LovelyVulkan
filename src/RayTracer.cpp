@@ -97,14 +97,15 @@ void RayTracer::embellishFrameContext(FrameContext& frame) {
     triangleDataBufferDescriptorInfo.range = VK_WHOLE_SIZE;
     VkWriteDescriptorSet triangleDataBufferWrite = vks::initializers::writeDescriptorSet(ret.descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 5, &triangleDataBufferDescriptorInfo);
 
-    VkDescriptorImageInfo blueNoiseDescriptorInfo{};
-    blueNoiseDescriptorInfo.imageView = blueNoise.view;
-    blueNoiseDescriptorInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    blueNoiseDescriptorInfo.sampler = ret.blueNoiseSampler;
-    VkWriteDescriptorSet blueNoiseWrite = vks::initializers::writeDescriptorSet(ret.descriptorSet, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 8, &blueNoiseDescriptorInfo);
+    VkDescriptorBufferInfo emissiveTriangleBufferDescriptorInfo{};
+    emissiveTriangleBufferDescriptorInfo.buffer = emissiveTriangleBuffer.buffer;
+    emissiveTriangleBufferDescriptorInfo.offset = 0;
+    emissiveTriangleBufferDescriptorInfo.range = VK_WHOLE_SIZE;
+    VkWriteDescriptorSet emissiveTriangleBufferWrite = vks::initializers::writeDescriptorSet(ret.descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 6, &emissiveTriangleBufferDescriptorInfo);
 
 
-    std::array<VkWriteDescriptorSet, 7> writes { writeAS, imageWrite, uniformBufferWrite, indexBufferWrite, vertexBufferWrite, triangleDataBufferWrite, blueNoiseWrite };
+
+    std::array<VkWriteDescriptorSet, 7> writes { writeAS, imageWrite, uniformBufferWrite, indexBufferWrite, vertexBufferWrite, triangleDataBufferWrite, emissiveTriangleBufferWrite };
     vkUpdateDescriptorSets(ctx.vkDevice, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
 }
 
@@ -173,8 +174,8 @@ void RayTracer::createRayTracingPipeline() {
     auto indexBufferBinding = vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, 3);
     auto vertexBufferBinding = vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, 4);
     auto triangleDataBufferBinding = vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, 5);
-    auto blueNoiseBinding = vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_RAYGEN_BIT_KHR, 8);
-    std::vector<VkDescriptorSetLayoutBinding> bindings { ASLayoutBinding, resultImageLayoutBinding, uniformBufferBinding, indexBufferBinding, vertexBufferBinding, triangleDataBufferBinding, blueNoiseBinding };
+    auto emissiveTriangleBufferBinding = vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_RAYGEN_BIT_KHR, 6);
+    std::vector<VkDescriptorSetLayoutBinding> bindings { ASLayoutBinding, resultImageLayoutBinding, uniformBufferBinding, indexBufferBinding, vertexBufferBinding, triangleDataBufferBinding, emissiveTriangleBufferBinding };
 
     auto layoutCreateInfo = vks::initializers::descriptorSetLayoutCreateInfo(bindings);
     vkCheck(vkCreateDescriptorSetLayout(ctx.vkDevice, &layoutCreateInfo, nullptr, &descriptorSetLayout));
@@ -252,11 +253,14 @@ void RayTracer::createBottomLevelAccelerationStructures() {
     std::vector<Vertex> allVertices(totalVertices);
     std::vector<uint32_t> allIndices(totalIndices);
     std::vector<TriangleData> allTriangleData(totalIndices/3);
+    std::vector<uint32_t> emissiveTriangles;
+    emissiveTriangles.push_back(0);
 
 
     uint32_t vertexBufferOffset = 0;
     uint32_t indexBufferOffset = 0;
     uint32_t transformBufferOffset = 0;
+    uint32_t modelIdx = 0;
     for (const auto& model : info.meshes) {
         memcpy(allVertices.data() + vertexBufferOffset, model->vertices.data(), model->vertices.size() * sizeof(Vertex));
         memcpy(allIndices.data() + indexBufferOffset, model->indices.data(), model->indices.size() * sizeof(uint32_t));
@@ -266,11 +270,22 @@ void RayTracer::createBottomLevelAccelerationStructures() {
             triangleData.vertices[0] = model->vertices[model->indices[i+0]].v;
             triangleData.vertices[1] = model->vertices[model->indices[i+1]].v;
             triangleData.vertices[2] = model->vertices[model->indices[i+2]].v;
+
+            if (modelIdx == 1) {
+                triangleData.vertices[0].w = 5.0f;
+                triangleData.vertices[1].w = 5.0f;
+                triangleData.vertices[2].w = 5.0f;
+                emissiveTriangles.push_back(indexBufferOffset/3 + i/3);
+            }
+
             allTriangleData[indexBufferOffset/3 + i/3] = triangleData;
         }
         vertexBufferOffset += model->vertices.size();
         indexBufferOffset += model->indices.size();
+        modelIdx++;
     }
+
+    emissiveTriangles[0] = emissiveTriangles.size() - 1;
 
     float scale = 0.4f;
     VkTransformMatrixKHR transformMatrix = {
@@ -286,6 +301,7 @@ void RayTracer::createBottomLevelAccelerationStructures() {
     buffertools::create_buffer_D_data(ctx, bufferUsage | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, allIndices.size() * sizeof(uint32_t), allIndices.data(), &indexBuffer);
     buffertools::create_buffer_D_data(ctx, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, allTriangleData.size() * sizeof(TriangleData), allTriangleData.data(), &triangleDataBuffer);
     buffertools::create_buffer_D_data(ctx, bufferUsage, allTransforms.size() * sizeof(VkTransformMatrixKHR), allTransforms.data(), &transformBuffer);
+    buffertools::create_buffer_D_data(ctx, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, emissiveTriangles.size() * sizeof(uint32_t), emissiveTriangles.data(), &emissiveTriangleBuffer);
 
     VkDeviceOrHostAddressConstKHR vertexBufferDeviceAddress{};
     VkDeviceOrHostAddressConstKHR indexBufferDeviceAddress{};

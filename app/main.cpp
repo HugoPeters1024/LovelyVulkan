@@ -28,6 +28,8 @@ int main(int argc, char** argv) {
     lv::RayTracerInfo rayInfo{};
     lv::Mesh sibenik, bunny;
     bunny.load("./app/cube.obj");
+    bunny.indices.resize(3);
+    bunny.normals.resize(3);
     sibenik.load("./app/sibenik/sibenik.obj");
     rayInfo.meshes.push_back(&sibenik);
     rayInfo.meshes.push_back(&bunny);

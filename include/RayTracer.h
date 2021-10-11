@@ -102,6 +102,7 @@ private:
     Buffer vertexBuffer; 
     Buffer indexBuffer;
     Buffer triangleDataBuffer;
+    Buffer emissiveTriangleBuffer;
     Buffer transformBuffer;
 
     std::vector<VkRayTracingShaderGroupCreateInfoKHR> shaderGroups{};
