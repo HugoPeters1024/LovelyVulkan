@@ -42,6 +42,7 @@ struct RayTracerCamera {
     inline void setTime(float time) { properties0[0] = time; }
     inline void setTick(uint32_t tick) { properties0[1] = reinterpret_cast<float&>(tick); }
     inline void setShouldReset(bool shouldReset) { properties0.z = shouldReset ? 1.0f : 0.0f; }
+    inline void setNEE(bool NEE) { properties0.w = NEE ? 1.0f : 0.0f; }
 };
 
 struct TriangleData {
@@ -68,7 +69,7 @@ public:
     void embellishFrameContext(FrameContext& frame) override;
     void cleanupFrameContext(FrameContext& frame) override;
 
-    void render(FrameContext& frame, const Camera& camera);
+    void render(FrameContext& frame, const Camera& camera, bool NEE);
 
     inline void resetAccumulator() { shouldReset = true; }
 

@@ -18,12 +18,14 @@ public:
 
     void render(FrameContext& frameContext, float energy, float fps);
 
+    bool NEE = false;
 private:
     void createDescriptorPool();
     void initImgui();
 
     OverlayInfo info;
     VkDescriptorPool imguiPool;
+
 };
 
 }

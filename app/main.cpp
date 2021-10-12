@@ -73,7 +73,7 @@ int main(int argc, char** argv) {
             // Run the raytracer
             camera.update(dt);
             if (camera.getHasMoved()) raytracer.resetAccumulator();
-            raytracer.render(frame, camera);
+            raytracer.render(frame, camera, overlay.NEE);
             
             // Collect info about the amount of energy
             vkCmdBindPipeline(frame.cmdBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, sumImage.pipeline);

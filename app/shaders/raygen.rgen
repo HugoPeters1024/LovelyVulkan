@@ -1,8 +1,7 @@
 #version 460
 #extension GL_EXT_ray_tracing : enable
 
-#include "math.glsl"
-
+#include "common.glsl"
 
 layout(binding = 0, set = 0) uniform accelerationStructureEXT topLevelAS;
 layout(binding = 1, set = 0, rgba32f) uniform image2D image;
@@ -13,11 +12,13 @@ layout(binding = 2, set = 0) uniform CameraProperties
     vec4 viewDir;
     vec4 properties0;
 } cam;
+layout(binding = 5, set = 0) readonly buffer TriangleDatas { TriangleData triangleData[]; };
 layout(binding = 6, set = 0) readonly buffer EmissiveTriangles { uint emissiveTriangles[]; };
 
 float getTime() { return cam.properties0.x; }
 uint getTick() { return floatBitsToUint(cam.properties0.y); }
 bool getShouldReset() { return cam.properties0.z > 0.001f; }
+uint getNrEmissiveTriangles() { return emissiveTriangles[0]; }
 
 
 layout(location = 0) rayPayloadEXT Payload {
@@ -42,6 +43,47 @@ uint getSeed() {
     return wang_hash(wang_hash(gl_LaunchIDEXT.x + gl_LaunchSizeEXT.x * gl_LaunchIDEXT.y) + getTick());
 }
 
+vec3 getDirectLightSample(inout uint seed, in vec3 origin, in vec3 surfaceNormal) {
+    const uint idx = emissiveTriangles[1];
+    const TriangleData td = triangleData[idx];
+    const vec3 v0 = td.vs[0].xyz;
+    const vec3 v1 = td.vs[1].xyz;
+    const vec3 v2 = td.vs[2].xyz;
+    const vec3 v0v1 = v1 - v0;
+    const vec3 v0v2 = v2 - v0;
+    const vec3 cr = cross(v0v1, v0v2);
+    const float crLength = length(cr);
+    const vec3 lightNormal = cr / crLength;
+
+    float u = rand(seed);
+    float v = rand(seed);
+    if (u+v > 0) { u = 1.0f - u; v = 1.0f - v; }
+
+    const vec3 shadowOrigin = v0 + u * v0v1 + v * v0v2;
+    vec3 shadowDir = origin - shadowOrigin;
+    const float shadowLength = length(shadowDir);
+    shadowDir /= shadowLength;
+
+    const float NL = dot(surfaceNormal, -shadowDir);
+    if (NL < 0) return vec3(0);
+
+    const float LNL = dot(lightNormal, shadowDir);
+    if (LNL < 0) return vec3(0);
+
+    payload.hit = true;
+    traceRayEXT(topLevelAS, 
+            gl_RayFlagsOpaqueEXT | gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsSkipClosestHitShaderEXT,
+            0xff, 0, 0, 0, shadowOrigin + 0.001f * lightNormal, 0.001f, shadowDir, shadowLength - 0.001f, 0);
+
+    if (payload.hit) return vec3(0);
+
+    const float lightArea = 0.5f * crLength;
+    const vec3 emission = vec3(td.vs[0].w, td.vs[1].w, td.vs[2].w);
+    const float SA = LNL * lightArea / (shadowLength * shadowLength);
+
+    return emission * SA * NL * getNrEmissiveTriangles();
+}
+
 vec3 getSample(inout uint seed) {
     const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(rand(seed), rand(seed));
     const vec2 inUV = pixelCenter / vec2(gl_LaunchSizeEXT.xy);
@@ -58,25 +100,37 @@ vec3 getSample(inout uint seed) {
     vec3 mask = vec3(1);
     const float tmin = 0.001f;
     const float tmax = 1000.0f;
+    bool NEE = cam.properties0.w > 0.0f;
 
     for(int rec=0; rec<16; rec++) {
         traceRayEXT(topLevelAS, gl_RayFlagsOpaqueEXT, 0xff, 0, 0, 0, origin, tmin, payload.direction, tmax, 0);
 
-        if (dot(payload.emission, payload.emission) > 0) {
-            accucolor += mask * payload.emission;
+        if (max3(payload.emission) > 0) {
+            if (!NEE || rec == 0) {
+                if (dot(payload.normal, payload.direction) < 0) {
+                    accucolor += mask * payload.emission;
+                }
+            }
             break;
         }
 
         if (!payload.hit) break;
-        payload.normal *= sign_(-dot(payload.normal, payload.direction));
+        const vec3 normal = payload.normal * sign_(-dot(payload.normal, payload.direction));
+        const vec3 BRDF = payload.materialColor * INVPI;
 
-        origin = origin + payload.d * payload.direction + 0.0001f * payload.normal;
-        payload.direction = SampleHemisphereCosine(payload.normal, rand(seed), rand(seed));
-        mask *= payload.materialColor;
+        origin = origin + payload.d * payload.direction + 0.001f * normal;
+
+        if (NEE) {
+            accucolor += mask * BRDF * getDirectLightSample(seed, origin, normal);
+        }
+
+
+        payload.direction = SampleHemisphereCosine(normal, rand(seed), rand(seed));
+        mask *= BRDF * PI;
 
         // Russian roulette
         if (!getShouldReset()) {
-            const float russianP = clamp(max3(payload.materialColor), 0.1f, 0.9f);
+            const float russianP = clamp(max3(BRDF * PI), 0.1f, 0.9f);
             if (rand(seed) < russianP) {
                 mask /= russianP;
             } else {
@@ -112,14 +166,11 @@ void main() {
     uint seed = getSeed();
     vec3 s = vec3(0);
 
-    uint sampleCount = getShouldReset() ? 1 : 30;
+    uint sampleCount = getShouldReset() ? 1 : 10;
     for(int i=0; i<sampleCount; i++)
         s += getSample(seed);
     s /= float(sampleCount);
 
-    if (emissiveTriangles[0] != 1) {
-        s = vec3(1,0,0);
-    }
     vec4 oldColor = getShouldReset() ? vec4(0) : imageLoad(image, ivec2(gl_LaunchIDEXT.xy));
     imageStore(image, ivec2(gl_LaunchIDEXT.xy), oldColor + vec4(s, 1));
 }

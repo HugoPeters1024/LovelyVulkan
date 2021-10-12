@@ -1,15 +1,8 @@
 #version 460
 #extension GL_EXT_ray_tracing : enable
 #extension GL_EXT_nonuniform_qualifier : enable
-#include "math.glsl"
+#include "common.glsl"
 
-struct Vertex {
-    vec4 pos;
-};
-
-struct TriangleData {
-    vec4 vs[3];
-};
 
 uint primitiveId() { return gl_PrimitiveID + gl_InstanceCustomIndexEXT; }
 

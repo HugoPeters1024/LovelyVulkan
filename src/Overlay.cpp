@@ -72,6 +72,7 @@ void Overlay::render(FrameContext& frame, float energy, float fps) {
     if (ImGui::Begin("test")) {
         ImGui::Text("FPS %0.2f", fps);
         ImGui::Text("Energy %.3f", energy);
+        ImGui::Checkbox("NEE", &NEE);
     }
     ImGui::End();
     ImGui::Render();

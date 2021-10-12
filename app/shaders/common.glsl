@@ -1,3 +1,14 @@
+const float PI = 3.141592653589793;
+const float INVPI = 1.0f / PI;
+
+struct Vertex {
+    vec4 pos;
+};
+
+struct TriangleData {
+    vec4 vs[3];
+};
+
 uint rand_xorshift(in uint seed)
 {
     seed ^= (seed << 13);
@@ -22,11 +33,13 @@ float rand(inout uint seed)
     return seed * 2.3283064365387e-10f;
 }
 
-vec3 SampleHemisphereCosine(in vec3 normal, in float u1, in float u2)
+vec3 SampleHemisphereCosine(in vec3 normal, in float r0, in float r1)
 {
-    const float r = sqrt(1.0f - u1 * u1);
-    const float phi = 2.0f * 3.14159265358979f * u2;
-    const vec3 s = vec3(cos(phi)*r, sin(phi)*r, u1);
+    const float r = sqrt(r0);
+    const float theta = 2.0f * PI * r1;
+    const float x = r * cos(theta);
+    const float y = r * sin(theta);
+    const vec3 s = vec3(x, y, sqrt(1.0f - r0));
 
     const vec3 w = normal;
     const vec3 u = normalize(cross((abs(w.x) > .1f ? vec3(0, 1, 0) : vec3(1, 0, 0)), w));

@@ -17,6 +17,7 @@ RayTracer::~RayTracer() {
     buffertools::destroyBuffer(ctx, vertexBuffer);
     buffertools::destroyBuffer(ctx, indexBuffer);
     buffertools::destroyBuffer(ctx, triangleDataBuffer);
+    buffertools::destroyBuffer(ctx, emissiveTriangleBuffer);
     buffertools::destroyBuffer(ctx, transformBuffer);
     buffertools::destroyBuffer(ctx, raygenShaderBindingTable);
     buffertools::destroyBuffer(ctx, missShaderBindingTable);
@@ -173,7 +174,7 @@ void RayTracer::createRayTracingPipeline() {
     auto uniformBufferBinding = vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_RAYGEN_BIT_KHR, 2);
     auto indexBufferBinding = vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, 3);
     auto vertexBufferBinding = vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, 4);
-    auto triangleDataBufferBinding = vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, 5);
+    auto triangleDataBufferBinding = vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_RAYGEN_BIT_KHR, 5);
     auto emissiveTriangleBufferBinding = vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_RAYGEN_BIT_KHR, 6);
     std::vector<VkDescriptorSetLayoutBinding> bindings { ASLayoutBinding, resultImageLayoutBinding, uniformBufferBinding, indexBufferBinding, vertexBufferBinding, triangleDataBufferBinding, emissiveTriangleBufferBinding };
 
@@ -272,9 +273,9 @@ void RayTracer::createBottomLevelAccelerationStructures() {
             triangleData.vertices[2] = model->vertices[model->indices[i+2]].v;
 
             if (modelIdx == 1) {
-                triangleData.vertices[0].w = 5.0f;
-                triangleData.vertices[1].w = 5.0f;
-                triangleData.vertices[2].w = 5.0f;
+                triangleData.vertices[0].w = 25.0f;
+                triangleData.vertices[1].w = 25.0f;
+                triangleData.vertices[2].w = 25.0f;
                 emissiveTriangles.push_back(indexBufferOffset/3 + i/3);
             }
 
@@ -287,11 +288,11 @@ void RayTracer::createBottomLevelAccelerationStructures() {
 
     emissiveTriangles[0] = emissiveTriangles.size() - 1;
 
-    float scale = 0.4f;
+    // Must be identity for NEE to know where the triangles are
     VkTransformMatrixKHR transformMatrix = {
-        scale, 0.0f, 0.0f, 0.0f,
-        0.0f, scale, 0.0f, 0.0f,
-        0.0f, 0.0f, scale, 0.0f,
+        1.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f,
     };
 
     std::vector<VkTransformMatrixKHR> allTransforms(info.meshes.size(), transformMatrix);
@@ -491,7 +492,7 @@ void RayTracer::destroyAccelerationStructure(AccelerationStructure& structure) c
 }
 
 
-void RayTracer::render(FrameContext& frame, const Camera& camera) {
+void RayTracer::render(FrameContext& frame, const Camera& camera, bool NEE) {
     const uint32_t handleSizeAligned = vks::tools::alignedSize(rayTracingPipelineProperties.shaderGroupHandleSize, rayTracingPipelineProperties.shaderGroupHandleAlignment);
 
     auto& wFrame = frame.getExtFrame<WindowFrame>();
@@ -508,6 +509,7 @@ void RayTracer::render(FrameContext& frame, const Camera& camera) {
     cameraInfo.setTime(static_cast<float>(glfwGetTime()));
     cameraInfo.setTick(tick++);
     cameraInfo.setShouldReset(shouldReset);
+    cameraInfo.setNEE(NEE);
 
     auto& myFrame = frame.getExtFrame<RayTracerFrame>();
     void* data;
