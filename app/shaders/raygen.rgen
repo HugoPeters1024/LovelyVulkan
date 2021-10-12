@@ -7,6 +7,7 @@ struct State {
     uint seed;
 } state;
 
+
 layout(binding = 0, set = 0) uniform accelerationStructureEXT topLevelAS;
 layout(binding = 1, set = 0, rgba32f) uniform image2D image;
 layout(binding = 2, set = 0) uniform CameraProperties
@@ -39,10 +40,10 @@ layout(location = 0) rayPayloadEXT Payload {
 
 
 void initPayload() {
-    payload.normal = vec3(0);
+    //payload.normal = vec3(0);
     payload.hit = false;
-    payload.materialColor = vec3(0.0f);
-    payload.d = 0.0f;
+    //payload.materialColor = vec3(0.0f);
+    //payload.d = 0.0f;
 }
 
 uint getSeed() {
@@ -50,6 +51,30 @@ uint getSeed() {
 }
 
 vec3 getDirectLightSample(in vec3 origin, in vec3 surfaceNormal) {
+    float valid = 0.0f;
+    uint winner = 0;
+
+    //for(uint i=0; i<4; i++) {
+    //    const uint idx = sampleEmissiveTriangle();
+    //    const TriangleData td = triangleData[idx];
+    //    const vec3 v0 = td.vs[0].xyz;
+    //    const vec3 v1 = td.vs[1].xyz;
+    //    const vec3 v2 = td.vs[2].xyz;
+    //    const vec3 v0v1 = v1 - v0;
+    //    const vec3 v0v2 = v2 - v0;
+    //    const vec3 cr = cross(v0v1, v0v2);
+    //    const float crLength = length(cr);
+    //    const vec3 lightNormal = cr / crLength;
+    //    const vec3 center = (v0 + v1 + v2) / 3.0f;
+    //    const vec3 fromLight = normalize(origin - center);
+
+    //    if (dot(fromLight, lightNormal) > 0) {
+    //        valid += 1.0f;
+    //        winner = idx;
+    //    }
+    //}
+
+
     const uint idx = sampleEmissiveTriangle();
     const TriangleData td = triangleData[idx];
     const vec3 v0 = td.vs[0].xyz;
@@ -108,7 +133,8 @@ vec3 getSample() {
     const float tmax = 1000.0f;
     bool NEE = cam.properties0.w > 0.0f;
 
-    for(int rec=0; rec<16; rec++) {
+    const uint depth = getShouldReset() ? 2 : 16;
+    for(int rec=0; rec<depth; rec++) {
         traceRayEXT(topLevelAS, gl_RayFlagsOpaqueEXT, 0xff, 0, 0, 0, origin, tmin, payload.direction, tmax, 0);
 
         if (max3(payload.emission) > 0) {
@@ -121,6 +147,7 @@ vec3 getSample() {
         }
 
         if (!payload.hit) break;
+
         const vec3 normal = payload.normal * sign_(-dot(payload.normal, payload.direction));
         const vec3 BRDF = payload.materialColor * INVPI;
 
@@ -143,25 +170,6 @@ vec3 getSample() {
                 break;
             }
         }
-
-
-        // Trace the shadow ray
-        //const vec3 lightPos = vec3(0);
-        //origin = origin + payload.d * direction + 0.001f * payload.normal;
-        //const vec3 toLight = lightPos - origin;
-        //const float shadowLength = length(toLight);
-        //direction = toLight / shadowLength;
-
-        // Assumption here that payload.hit must be true
-        // miss shader will set it to false
-        //traceRayEXT(topLevelAS, 
-        //        gl_RayFlagsOpaqueEXT | gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsSkipClosestHitShaderEXT,
-        //        0xff, 0, 0, 0, origin, tmin, direction, shadowLength, 0);
-
-        //if (!payload.hit)
-        //    accucolor += payload.materialColor;
-
-        //direction = reflect(direction, payload.normal);
     }
 
     return accucolor;

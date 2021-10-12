@@ -273,9 +273,9 @@ void RayTracer::createBottomLevelAccelerationStructures() {
             triangleData.vertices[2] = model->vertices[model->indices[i+2]].v;
 
             if (modelIdx == 1) {
-                triangleData.vertices[0].w = 25.0f;
-                triangleData.vertices[1].w = 25.0f;
-                triangleData.vertices[2].w = 25.0f;
+                triangleData.vertices[0].w = 5.0f;
+                triangleData.vertices[1].w = 5.0f;
+                triangleData.vertices[2].w = 15.0f;
                 emissiveTriangles.push_back(indexBufferOffset/3 + i/3);
             }
 

@@ -15,4 +15,5 @@ void main() {
     payload.hit = false;
     const vec3 sunDir = normalize(vec3(1,1,0));
     payload.emission = vec3(0, 0, 0.01f) + vec3(max(0.0f, 14 * pow(dot(payload.direction, sunDir), 80)));
+    payload.emission = vec3(5,3,1);
 }
