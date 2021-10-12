@@ -3,6 +3,10 @@
 
 #include "common.glsl"
 
+struct State {
+    uint seed;
+} state;
+
 layout(binding = 0, set = 0) uniform accelerationStructureEXT topLevelAS;
 layout(binding = 1, set = 0, rgba32f) uniform image2D image;
 layout(binding = 2, set = 0) uniform CameraProperties
@@ -19,6 +23,7 @@ float getTime() { return cam.properties0.x; }
 uint getTick() { return floatBitsToUint(cam.properties0.y); }
 bool getShouldReset() { return cam.properties0.z > 0.001f; }
 uint getNrEmissiveTriangles() { return emissiveTriangles[0]; }
+uint sampleEmissiveTriangle() { state.seed = rand_xorshift(state.seed); return emissiveTriangles[(state.seed % emissiveTriangles[0])+1]; }
 
 
 layout(location = 0) rayPayloadEXT Payload {
@@ -32,6 +37,7 @@ layout(location = 0) rayPayloadEXT Payload {
 } payload;
 
 
+
 void initPayload() {
     payload.normal = vec3(0);
     payload.hit = false;
@@ -43,8 +49,8 @@ uint getSeed() {
     return wang_hash(wang_hash(gl_LaunchIDEXT.x + gl_LaunchSizeEXT.x * gl_LaunchIDEXT.y) + getTick());
 }
 
-vec3 getDirectLightSample(inout uint seed, in vec3 origin, in vec3 surfaceNormal) {
-    const uint idx = emissiveTriangles[1];
+vec3 getDirectLightSample(in vec3 origin, in vec3 surfaceNormal) {
+    const uint idx = sampleEmissiveTriangle();
     const TriangleData td = triangleData[idx];
     const vec3 v0 = td.vs[0].xyz;
     const vec3 v1 = td.vs[1].xyz;
@@ -55,9 +61,9 @@ vec3 getDirectLightSample(inout uint seed, in vec3 origin, in vec3 surfaceNormal
     const float crLength = length(cr);
     const vec3 lightNormal = cr / crLength;
 
-    float u = rand(seed);
-    float v = rand(seed);
-    if (u+v > 0) { u = 1.0f - u; v = 1.0f - v; }
+    float u = rand(state.seed);
+    float v = rand(state.seed);
+    if (u+v > 1.0f) { u = 1.0f - u; v = 1.0f - v; }
 
     const vec3 shadowOrigin = v0 + u * v0v1 + v * v0v2;
     vec3 shadowDir = origin - shadowOrigin;
@@ -84,8 +90,8 @@ vec3 getDirectLightSample(inout uint seed, in vec3 origin, in vec3 surfaceNormal
     return emission * SA * NL * getNrEmissiveTriangles();
 }
 
-vec3 getSample(inout uint seed) {
-    const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(rand(seed), rand(seed));
+vec3 getSample() {
+    const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(rand(state.seed), rand(state.seed));
     const vec2 inUV = pixelCenter / vec2(gl_LaunchSizeEXT.xy);
     vec2 d = inUV * 2.0f - 1.0f;
     d.y = -d.y;
@@ -106,8 +112,8 @@ vec3 getSample(inout uint seed) {
         traceRayEXT(topLevelAS, gl_RayFlagsOpaqueEXT, 0xff, 0, 0, 0, origin, tmin, payload.direction, tmax, 0);
 
         if (max3(payload.emission) > 0) {
-            if (!NEE || rec == 0) {
-                if (dot(payload.normal, payload.direction) < 0) {
+            if (!NEE || rec == 0 || !payload.hit) {
+                if (!payload.hit || dot(payload.normal, payload.direction) < 0) {
                     accucolor += mask * payload.emission;
                 }
             }
@@ -121,17 +127,17 @@ vec3 getSample(inout uint seed) {
         origin = origin + payload.d * payload.direction + 0.001f * normal;
 
         if (NEE) {
-            accucolor += mask * BRDF * getDirectLightSample(seed, origin, normal);
+            accucolor += mask * BRDF * getDirectLightSample(origin, normal);
         }
 
 
-        payload.direction = SampleHemisphereCosine(normal, rand(seed), rand(seed));
+        payload.direction = SampleHemisphereCosine(normal, rand(state.seed), rand(state.seed));
         mask *= BRDF * PI;
 
         // Russian roulette
         if (!getShouldReset()) {
             const float russianP = clamp(max3(BRDF * PI), 0.1f, 0.9f);
-            if (rand(seed) < russianP) {
+            if (rand(state.seed) < russianP) {
                 mask /= russianP;
             } else {
                 break;
@@ -163,12 +169,12 @@ vec3 getSample(inout uint seed) {
 
 
 void main() {
-    uint seed = getSeed();
+    state.seed = getSeed();
     vec3 s = vec3(0);
 
     uint sampleCount = getShouldReset() ? 1 : 10;
     for(int i=0; i<sampleCount; i++)
-        s += getSample(seed);
+        s += getSample();
     s /= float(sampleCount);
 
     vec4 oldColor = getShouldReset() ? vec4(0) : imageLoad(image, ivec2(gl_LaunchIDEXT.xy));
